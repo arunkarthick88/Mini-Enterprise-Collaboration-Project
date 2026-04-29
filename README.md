@@ -1,15 +1,17 @@
 # Enterprise Collaboration Platform
 
-A full-stack, role-based task management and collaboration platform designed to streamline task delegation and tracking across different organizational levels.
+A full-stack, role-based task management and collaboration platform designed to streamline task delegation, complex approvals, and team workflows across different organizational levels.
 
-## Features (Phase 1)
+## Features
 
-* **Role-Based Access Control (RBAC):** Strict permission enforcement for Administrators, Managers, and Employees.
+* **Role-Based Access Control (RBAC):** Strict permission enforcement and dynamic UI rendering for Administrators, Managers, and Employees.
+* **Interactive Kanban Board:** Full drag-and-drop workflow (To-Do -> In Progress -> Review -> Done) with strict backend transition validation to enforce proper enterprise procedures.
+* **Multi-Level Approval Engine:** Automated escalation workflows where Employees submit requests, Managers review/escalate, and Admins provide final authorization. Includes mandatory justification tracking.
+* **Task Comments & Collaboration:** Context-aware messaging directly on task cards, featuring role-restricted "Internal Notes" visible only to management.
 * **Secure Authentication:** JWT-based login and registration with bcrypt password hashing.
 * **Task Delegation Engine:** Managers and Admins can create and assign tasks directly to specific employees.
-* **Dynamic Workflows:** Employees receive personalized dashboards showing only their assigned tasks and can update statuses (To-Do -> In Progress -> Done).
-* **RESTful API:** A robust, fully-documented Python backend.
-* **Modern UI:** A responsive, clean interface built with React and Tailwind CSS.
+* **RESTful API:** A robust, fully-documented Python backend with SQLAlchemy ORM.
+* **Modern UI:** A responsive, clean interface built with React, Tailwind CSS, and Lucide Icons.
 
 ## Tech Stack
 
@@ -25,26 +27,29 @@ A full-stack, role-based task management and collaboration platform designed to 
 * Build Tool: Vite
 * Styling: Tailwind CSS
 * Routing: React Router DOM
-* HTTP Client: Axios
+* State & Logic: Axios, @hello-pangea/dnd (Drag & Drop)
+* Icons: Lucide React
 
-Local Setup Instructions
-1. Database Setup
-Install PostgreSQL and pgAdmin.
+## Local Setup Instructions
 
-Create a new database named collab_db.
+### 1. Database Setup
+1. Install PostgreSQL and pgAdmin.
+2. Create a new database named `collab_db`.
+3. Update the database URL in `backend/database.py` with your local PostgreSQL credentials.
 
-Update the database URL in backend/database.py with your local PostgreSQL credentials.
+### 2. Run the Backend
+Navigate to the `backend` directory, activate the virtual environment, and start the server:
 
-2. Run the Backend
-Navigate to the backend directory, activate the virtual environment, and start the server:
-
-Bash
+```bash
 cd backend
 venv\Scripts\activate
 pip install -r requirements.txt
 uvicorn main:app --reload
-The API will be available at: http://localhost:8000
-Interactive API Documentation: http://localhost:8000/docs
+```   
+* The API will be available at: `http://localhost:8000`
+* Interactive API Documentation: `http://localhost:8000/docs`
+
+### 3. Run the Frontend
 
 3. Run the Frontend
 Open a new terminal, navigate to the frontend directory, install dependencies, and start the Vite development server:
@@ -56,8 +61,8 @@ npm run dev
 The User Interface will be available at: http://localhost:5173
 
 User Roles Reference
-Admin: Full system access. Can view all users, create tasks, assign tasks, and delete tasks.
+Admin: Full system access. Can view all users, manage all tasks, write internal notes, and provide final authorization on escalated approval requests.
 
-Manager: Can view, create, assign, and delete tasks.
+Manager: Can view, create, and assign tasks. Can write internal notes, and can approve, reject, or escalate employee requests to Admins.
 
-Employee: Can only view tasks assigned directly to them and update the task status.
+Employee: Can only view tasks assigned directly to them, move tasks through the Kanban workflow, post public comments, and submit new approval requests.
