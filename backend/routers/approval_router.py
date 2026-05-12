@@ -1,7 +1,7 @@
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 from typing import List
-import models, schemas, auth, database
+import models, schemas, auth, database, services  # <-- Imported services
 
 router = APIRouter(prefix="/approvals", tags=["Approvals"])
 
@@ -11,6 +11,11 @@ def create_approval(approval: schemas.ApprovalCreate, db: Session = Depends(data
     db.add(new_app)
     db.commit()
     db.refresh(new_app)
+
+    # --- PHASE 3: Audit & Notifications ---
+    services.log_audit(db, current_user.id, "APPROVAL_REQUESTED", "Approval", new_app.id)
+    services.create_notification(db, current_user.id, f"Your approval request '{new_app.title}' has been successfully submitted.")
+
     return new_app
 
 @router.get("/", response_model=List[schemas.ApprovalResponse])
@@ -42,7 +47,7 @@ def take_approval_action(approval_id: int, action_data: schemas.ApprovalAction, 
     else:
         approval.status = action_data.action # reject or hold
 
-    # Record the audit trail
+    # Record the approval history (Phase 2 feature)
     history = models.ApprovalHistory(
         approval_id=approval.id,
         action_by_id=current_user.id,
@@ -52,4 +57,20 @@ def take_approval_action(approval_id: int, action_data: schemas.ApprovalAction, 
     db.add(history)
     db.commit()
     db.refresh(approval)
+
+    # --- PHASE 3: Audit & Notifications ---
+    # 1. Master Audit Trail
+    services.log_audit(db, current_user.id, f"APPROVAL_{action_data.action.upper()}", "Approval", approval.id)
+
+    # 2. Notify the requester
+    if approval.requested_by_id != current_user.id:
+        if action_data.action == "approve" and approval.status == "pending":
+            msg = f"Your approval '{approval.title}' was approved by your manager and escalated to Admin."
+        elif action_data.action == "approve" and approval.status == "approved":
+            msg = f"Your approval '{approval.title}' was fully approved!"
+        else:
+            msg = f"Your approval '{approval.title}' was marked as {action_data.action}."
+        
+        services.create_notification(db, approval.requested_by_id, msg)
+
     return approval

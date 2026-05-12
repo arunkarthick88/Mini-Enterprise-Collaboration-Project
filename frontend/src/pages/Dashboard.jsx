@@ -1,310 +1,169 @@
 import { useState, useEffect } from 'react';
-import { useNavigate, Link } from 'react-router-dom';
-import { DragDropContext, Droppable, Draggable } from '@hello-pangea/dnd';
-import { LayoutDashboard, LogOut, Plus, Trash2, X, MessageSquare, ShieldCheck } from 'lucide-react';
+import { Link, useNavigate } from 'react-router-dom';
+import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer } from 'recharts';
+import { Sparkles, Bell } from 'lucide-react';
 import api from '../api';
 
-const COLUMNS = {
-    todo: { name: 'To Do', color: 'border-gray-200 bg-gray-50' },
-    in_progress: { name: 'In Progress', color: 'border-blue-200 bg-blue-50' },
-    review: { name: 'Review', color: 'border-purple-200 bg-purple-50' },
-    done: { name: 'Done', color: 'border-green-200 bg-green-50' }
-};
-
 export default function Dashboard() {
-    const [tasks, setTasks] = useState({ todo: [], in_progress: [], review: [], done: [] });
     const [user, setUser] = useState(null);
-    const [usersList, setUsersList] = useState([]);
+    const [tasks, setTasks] = useState([]);
+    const [approvals, setApprovals] = useState([]);
+    const [aiData, setAiData] = useState(null);
     const navigate = useNavigate();
 
-    // Form State
-    const [title, setTitle] = useState('');
-    const [description, setDescription] = useState('');
-    const [priority, setPriority] = useState('medium');
-    const [assigneeId, setAssigneeId] = useState('');
-
-    // Modal & Comments State
-    const [selectedTask, setSelectedTask] = useState(null);
-    const [comments, setComments] = useState([]);
-    const [newComment, setNewComment] = useState('');
-    const [isInternal, setIsInternal] = useState(false);
-
     useEffect(() => {
-        fetchUserAndTasks();
+        fetchData();
     }, []);
 
-    const fetchUserAndTasks = async () => {
+    const fetchData = async () => {
         try {
             const userRes = await api.get('/auth/me');
             setUser(userRes.data);
 
             const taskRes = await api.get('/tasks/');
-            
-            const groupedTasks = { todo: [], in_progress: [], review: [], done: [] };
-            taskRes.data.forEach(task => {
-                if (groupedTasks[task.status]) {
-                    groupedTasks[task.status].push(task);
-                }
-            });
-            setTasks(groupedTasks);
+            setTasks(taskRes.data);
 
-            if (userRes.data.role === 'admin' || userRes.data.role === 'manager') {
-                const usersRes = await api.get('/auth/users');
-                setUsersList(usersRes.data);
-            }
+            const appRes = await api.get('/approvals/');
+            setApprovals(appRes.data);
+
+            // Phase 3: Fetch the new AI Intelligence Data
+            const aiRes = await api.get('/dashboard/ai-summary');
+            setAiData(aiRes.data);
         } catch (err) {
             localStorage.removeItem('token');
             navigate('/');
         }
     };
 
-    const handleCreateTask = async (e) => {
-        e.preventDefault();
-        try {
-            await api.post('/tasks/', { title, description, priority, assigned_to_id: assigneeId ? parseInt(assigneeId) : null });
-            setTitle(''); setDescription(''); setPriority('medium'); setAssigneeId('');
-            fetchUserAndTasks();
-        } catch (err) { alert('Failed to create task.'); }
+    const handleLogout = () => {
+        localStorage.removeItem('token');
+        navigate('/');
     };
 
-    const handleDeleteTask = async (id, e) => {
-        e.stopPropagation(); // Prevents the modal from opening when clicking delete
-        if (!window.confirm("Delete this task?")) return;
-        try {
-            await api.delete(`/tasks/${id}`);
-            fetchUserAndTasks();
-        } catch (err) { alert('Not authorized to delete this task.'); }
-    };
+    if (!user || !aiData) return <div className="min-h-screen flex items-center justify-center font-bold text-blue-600">Loading Enterprise Dashboard...</div>;
 
-    // --- KANBAN DRAG & DROP LOGIC ---
-    const onDragEnd = async (result) => {
-        const { source, destination, draggableId } = result;
-        if (!destination) return; 
-        if (source.droppableId === destination.droppableId && source.index === destination.index) return;
+    // --- CALCULATE ANALYTICS ---
+    const totalTasks = tasks.length;
+    const completedTasks = tasks.filter(t => t.status === 'done').length;
+    const inReviewTasks = tasks.filter(t => t.status === 'review').length;
+    const pendingApprovals = approvals.filter(a => a.status === 'pending').length;
 
-        const sourceCol = source.droppableId;
-        const destCol = destination.droppableId;
-        const taskId = parseInt(draggableId);
-
-        const newTasks = { ...tasks };
-        const [movedTask] = newTasks[sourceCol].splice(source.index, 1);
-        movedTask.status = destCol;
-        newTasks[destCol].splice(destination.index, 0, movedTask);
-        setTasks(newTasks);
-
-        try {
-            await api.patch(`/tasks/${taskId}`, { status: destCol });
-        } catch (err) {
-            alert(err.response?.data?.detail || "Failed to move task.");
-            fetchUserAndTasks(); 
-        }
-    };
-
-    // --- COMMENTS LOGIC ---
-    const openTaskModal = async (task) => {
-        setSelectedTask(task);
-        fetchComments(task.id);
-    };
-
-    const fetchComments = async (taskId) => {
-        try {
-            const res = await api.get(`/tasks/${taskId}/comments`);
-            setComments(res.data);
-        } catch (err) { console.error("Could not fetch comments"); }
-    };
-
-    const handleAddComment = async (e) => {
-        e.preventDefault();
-        if (!newComment.trim()) return;
-        try {
-            await api.post(`/tasks/${selectedTask.id}/comments`, { content: newComment, is_internal: isInternal });
-            setNewComment('');
-            setIsInternal(false);
-            fetchComments(selectedTask.id);
-        } catch (err) { alert('Failed to add comment.'); }
-    };
-
-    if (!user) return <div className="min-h-screen flex items-center justify-center font-bold">Loading...</div>;
+    // Chart Data Preparation
+    const barData = [
+        { name: 'TODO', count: tasks.filter(t => t.status === 'todo').length },
+        { name: 'IN PROGRESS', count: tasks.filter(t => t.status === 'in_progress').length },
+        { name: 'REVIEW', count: tasks.filter(t => t.status === 'review').length },
+        { name: 'DONE', count: tasks.filter(t => t.status === 'done').length }
+    ];
 
     return (
-        <div className="min-h-screen bg-gray-100 p-8">
-            <div className="max-w-7xl mx-auto">
-                
-                {/* HEADER */}
-                <div className="flex justify-between items-center mb-8 bg-white p-6 rounded-xl shadow-sm border border-gray-200">
-                    <div className="flex items-center gap-3">
-                        <div className="p-3 bg-blue-600 text-white rounded-lg"><LayoutDashboard size={24} /></div>
-                        <div>
-                            <h1 className="text-2xl font-extrabold text-gray-900">Kanban Board</h1>
-                            <p className="text-sm text-gray-500 font-medium">Enterprise Workflow • {user.name}</p>
-                        </div>
-                    </div>
-                    <div className="flex items-center gap-4">
-                        {/* APPROVALS LINK ADDED HERE */}
-                        <Link to="/approvals" className="flex items-center gap-2 text-sm font-bold text-gray-500 hover:text-purple-600 transition bg-gray-50 px-3 py-2 rounded-lg border">
-                            <ShieldCheck size={16} /> Approvals
-                        </Link>
+        <div className="min-h-screen bg-gray-50 font-sans">
+            
+            {/* TOP NAVBAR */}
+            <nav className="bg-blue-600 text-white p-4 flex justify-between items-center shadow-md">
+                <div>
+                    <h1 className="text-2xl font-bold tracking-wide">TaskFlow</h1>
+                    <p className="text-xs text-blue-200">{user.name} - {user.role}</p>
+                </div>
+                <div className="flex items-center gap-5 text-sm font-medium">
+                    <Link to="/dashboard" className="underline hover:text-blue-200 transition">Dashboard</Link>
+                    <Link to="/kanban" className="hover:text-blue-200 transition">Kanban</Link>
+                    <Link to="/approvals" className="hover:text-blue-200 transition">Approvals</Link>
+                    <Link to="/activity" className="hover:text-blue-200 transition">Activity</Link>
+                    <Link to="/create-task" className="hover:text-blue-200 transition">Create</Link>
+                    {(user.role === 'admin' || user.role === 'manager') && (
+                        <Link to="/users" className="hover:text-blue-200 transition">Users</Link>
+                    )}
+                    
+                    {/* NOTIFICATION BELL - FIXED WITH <Link> */}
+                    <Link to="/notifications" className="relative cursor-pointer hover:text-blue-200 transition ml-2 flex items-center">
+                        <Bell size={20} />
+                        {aiData.unread_notifications > 0 && (
+                            <span className="absolute -top-2 -right-2 bg-red-500 text-white text-[10px] font-bold w-4 h-4 flex items-center justify-center rounded-full shadow">
+                                {aiData.unread_notifications}
+                            </span>
+                        )}
+                    </Link>
 
-                        <span className="bg-blue-100 text-blue-800 px-4 py-1.5 rounded-lg text-xs font-black uppercase tracking-wider">{user.role}</span>
-                        <button onClick={() => { localStorage.removeItem('token'); navigate('/'); }} className="flex items-center gap-2 text-sm font-bold text-gray-500 hover:text-red-600 transition">
-                            <LogOut size={16} /> Logout
-                        </button>
+                    <button onClick={handleLogout} className="bg-red-500 hover:bg-red-600 text-white px-4 py-1.5 rounded transition ml-2">Logout</button>
+                </div>
+            </nav>
+
+            <div className="max-w-7xl mx-auto p-8">
+                
+                {/* HEADER SECTION */}
+                <div className="flex justify-between items-end mb-6">
+                    <div>
+                        <h2 className="text-3xl font-bold text-gray-800">Dashboard</h2>
+                        <p className="text-gray-500 mt-1">Enterprise Overview</p>
                     </div>
                 </div>
 
-                {/* CREATE TASK FORM */}
-                {(user.role === 'admin' || user.role === 'manager') && (
-                    <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-200 mb-8">
-                        <form onSubmit={handleCreateTask} className="grid grid-cols-1 md:grid-cols-12 gap-4 items-end">
-                            <div className="md:col-span-3">
-                                <label className="block text-xs font-bold text-gray-600 mb-1">TASK TITLE</label>
-                                <input type="text" required value={title} onChange={e => setTitle(e.target.value)} className="w-full p-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none" placeholder="What needs to be done?" />
-                            </div>
-                            <div className="md:col-span-3">
-                                <label className="block text-xs font-bold text-gray-600 mb-1">DESCRIPTION</label>
-                                <input type="text" value={description} onChange={e => setDescription(e.target.value)} className="w-full p-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none" placeholder="Brief details..." />
-                            </div>
-                            <div className="md:col-span-2">
-                                <label className="block text-xs font-bold text-gray-600 mb-1">PRIORITY</label>
-                                <select value={priority} onChange={e => setPriority(e.target.value)} className="w-full p-2.5 border border-gray-300 rounded-lg outline-none bg-white">
-                                    <option value="low">Low</option>
-                                    <option value="medium">Medium</option>
-                                    <option value="high">High</option>
-                                </select>
-                            </div>
-                            <div className="md:col-span-2">
-                                <label className="block text-xs font-bold text-gray-600 mb-1">ASSIGN TO</label>
-                                <select value={assigneeId} onChange={e => setAssigneeId(e.target.value)} className="w-full p-2.5 border border-gray-300 rounded-lg outline-none bg-white">
-                                    <option value="">Unassigned</option>
-                                    {usersList.map(u => <option key={u.id} value={u.id}>{u.name}</option>)}
-                                </select>
-                            </div>
-                            <div className="md:col-span-2">
-                                <button type="submit" className="w-full flex items-center justify-center gap-2 bg-blue-600 text-white font-bold p-2.5 rounded-lg hover:bg-blue-700 transition">
-                                    <Plus size={18} /> Add Task
-                                </button>
-                            </div>
-                        </form>
+                {/* 🤖 AI INSIGHT BANNER */}
+                <div className="bg-gradient-to-r from-indigo-600 to-purple-600 rounded-xl p-6 text-white shadow-lg mb-8 flex items-start gap-4">
+                    <div className="p-3 bg-white/20 rounded-lg backdrop-blur-sm">
+                        <Sparkles size={24} className="text-yellow-300" />
                     </div>
-                )}
-
-                {/* DRAG & DROP KANBAN BOARD */}
-                <DragDropContext onDragEnd={onDragEnd}>
-                    <div className="grid grid-cols-1 md:grid-cols-4 gap-6 items-start">
-                        {Object.entries(COLUMNS).map(([columnId, colData]) => (
-                            <div key={columnId} className={`rounded-xl border ${colData.color} p-4 min-h-[500px] flex flex-col`}>
-                                <h3 className="font-extrabold text-gray-700 mb-4 flex items-center justify-between">
-                                    {colData.name} 
-                                    <span className="bg-white px-2 py-0.5 rounded text-sm shadow-sm">{tasks[columnId].length}</span>
-                               </h3>
-                                
-                                <Droppable droppableId={columnId}>
-                                    {(provided) => (
-                                        <div {...provided.droppableProps} ref={provided.innerRef} className="flex-1">
-                                            {tasks[columnId].map((task, index) => (
-                                                <Draggable key={task.id.toString()} draggableId={task.id.toString()} index={index}>
-                                                    {(provided, snapshot) => (
-                                                        <div
-                                                            ref={provided.innerRef}
-                                                            {...provided.draggableProps}
-                                                            {...provided.dragHandleProps}
-                                                            onClick={() => openTaskModal(task)}
-                                                            className={`bg-white p-4 rounded-lg shadow-sm border border-gray-200 mb-3 group cursor-pointer ${snapshot.isDragging ? 'shadow-lg ring-2 ring-blue-400' : 'hover:border-blue-300 hover:shadow-md transition-all'}`}
-                                                        >
-                                                            <div className="flex justify-between items-start mb-2">
-                                                                <h4 className="font-bold text-gray-900 leading-tight">{task.title}</h4>
-                                                                {(user.role === 'admin' || user.role === 'manager') && (
-                                                                    <button onClick={(e) => handleDeleteTask(task.id, e)} className="text-gray-400 hover:text-red-500 opacity-0 group-hover:opacity-100 transition">
-                                                                        <Trash2 size={16} />
-                                                                    </button>
-                                                                )}
-                                                            </div>
-                                                            {task.description && <p className="text-xs text-gray-500 mb-3 line-clamp-2">{task.description}</p>}
-                                                            <div className="flex items-center justify-between mt-auto">
-                                                                <span className={`text-[10px] uppercase font-bold px-2 py-1 rounded-full ${
-                                                                    task.priority === 'high' ? 'bg-red-100 text-red-700' : 
-                                                                    task.priority === 'medium' ? 'bg-yellow-100 text-yellow-700' : 
-                                                                    'bg-blue-100 text-blue-700'
-                                                                }`}>
-                                                                    {task.priority}
-                                                                </span>
-                                                                <MessageSquare size={14} className="text-gray-400" />
-                                                            </div>
-                                                        </div>
-                                                    )}
-                                                </Draggable>
-                                            ))}
-                                            {provided.placeholder}
-                                        </div>
-                                    )}
-                                </Droppable>
-                            </div>
-                        ))}
+                    <div>
+                        <h3 className="text-sm font-black tracking-wider text-purple-200 uppercase mb-1">AI Assistant Summary</h3>
+                        <p className="text-lg font-medium leading-relaxed">{aiData.ai_insight}</p>
                     </div>
-                </DragDropContext>
+                </div>
 
-                {/* TASK DETAILS & COMMENTS MODAL */}
-                {selectedTask && (
-                    <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4" onClick={() => setSelectedTask(null)}>
-                        <div className="bg-white w-full max-w-xl rounded-2xl shadow-2xl flex flex-col overflow-hidden max-h-[85vh]" onClick={e => e.stopPropagation()}>
-                            
-                            {/* Modal Header */}
-                            <div className="p-5 border-b border-gray-100 flex justify-between items-start bg-gray-50">
-                                <div>
-                                    <span className="text-[10px] font-black tracking-widest uppercase text-gray-400 mb-1 block">TASK DETAILS</span>
-                                    <h2 className="font-bold text-xl text-gray-900">{selectedTask.title}</h2>
-                                    <p className="text-sm text-gray-600 mt-2">{selectedTask.description || "No description provided."}</p>
-                                </div>
-                                <button onClick={() => setSelectedTask(null)} className="p-2 text-gray-400 hover:text-gray-800 hover:bg-gray-200 rounded-lg transition">
-                                    <X size={20}/>
-                                </button>
-                            </div>
+                {/* STAT CARDS */}
+                <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8 text-white">
+                    <div className="bg-purple-600 p-6 rounded-xl shadow-sm">
+                        <p className="text-sm font-medium mb-2 opacity-90">Total Tasks</p>
+                        <h3 className="text-4xl font-bold">{totalTasks}</h3>
+                    </div>
+                    <div className="bg-emerald-500 p-6 rounded-xl shadow-sm">
+                        <p className="text-sm font-medium mb-2 opacity-90">Completed</p>
+                        <h3 className="text-4xl font-bold">{completedTasks}</h3>
+                    </div>
+                    <div className="bg-amber-500 p-6 rounded-xl shadow-sm">
+                        <p className="text-sm font-medium mb-2 opacity-90">Pending Approvals</p>
+                        <h3 className="text-4xl font-bold">{pendingApprovals}</h3>
+                    </div>
+                    <div className="bg-blue-500 p-6 rounded-xl shadow-sm">
+                        <p className="text-sm font-medium mb-2 opacity-90">In Review</p>
+                        <h3 className="text-4xl font-bold">{inReviewTasks}</h3>
+                    </div>
+                </div>
 
-                            {/* Modal Body: Comments List */}
-                            <div className="p-5 flex-1 overflow-y-auto bg-gray-50/50 space-y-4">
-                                {comments.length === 0 ? (
-                                    <div className="text-center text-gray-400 italic py-8 text-sm">No comments yet. Start the conversation!</div>
-                                ) : (
-                                    comments.map(c => (
-                                        <div key={c.id} className={`p-4 rounded-xl text-sm ${c.is_internal ? 'bg-yellow-50 border border-yellow-200' : 'bg-white border border-gray-100 shadow-sm'}`}>
-                                            <div className="flex justify-between mb-1">
-                                                <span className="font-bold text-gray-800">User #{c.user_id}</span>
-                                                {c.is_internal && <span className="text-[10px] bg-yellow-200 text-yellow-800 px-2 py-0.5 rounded font-bold uppercase">Internal Note</span>}
-                                            </div>
-                                            <p className="text-gray-600">{c.content}</p>
-                                        </div>
-                                    ))
-                                )}
-                            </div>
+                {/* CHARTS & RECENT ACTIVITY SECTION */}
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                    
+                    {/* Task Distribution (Spans 2 columns) */}
+                    <div className="md:col-span-2 bg-white p-6 rounded-xl shadow-sm border border-gray-100 h-96">
+                        <h3 className="text-lg font-bold text-gray-800 mb-6">Task Distribution</h3>
+                        <ResponsiveContainer width="100%" height="100%">
+                            <BarChart data={barData}>
+                                <XAxis dataKey="name" tick={{fontSize: 12}} />
+                                <YAxis allowDecimals={false} />
+                                <Tooltip cursor={{fill: '#f3f4f6'}} />
+                                <Bar dataKey="count" fill="#6366f1" radius={[4, 4, 0, 0]} />
+                            </BarChart>
+                        </ResponsiveContainer>
+                    </div>
 
-                            {/* Modal Footer: Add Comment Form */}
-                            <div className="p-5 border-t border-gray-100 bg-white">
-                                <form onSubmit={handleAddComment} className="flex flex-col gap-3">
-                                    <textarea 
-                                        required 
-                                        value={newComment} 
-                                        onChange={e => setNewComment(e.target.value)} 
-                                        className="w-full p-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none text-sm resize-none" 
-                                        placeholder="Write a comment..." 
-                                        rows="2"
-                                    />
-                                    <div className="flex justify-between items-center">
-                                        {(user.role === 'admin' || user.role === 'manager') ? (
-                                            <label className="flex items-center gap-2 text-sm font-medium text-gray-600 cursor-pointer">
-                                                <input type="checkbox" checked={isInternal} onChange={e => setIsInternal(e.target.checked)} className="w-4 h-4 rounded text-blue-600 focus:ring-blue-500" />
-                                                Mark as Internal Note
-                                            </label>
-                                        ) : <div></div>}
-                                        <button type="submit" className="bg-gray-900 text-white font-bold py-2 px-6 rounded-lg hover:bg-blue-600 transition text-sm">
-                                            Post Comment
-                                        </button>
+                    {/* AI Recent Activity Feed */}
+                    <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-100 h-96 flex flex-col">
+                        <h3 className="text-lg font-bold text-gray-800 mb-4">Recent Activity</h3>
+                        <div className="flex-1 overflow-y-auto pr-2 space-y-4">
+                            {aiData.recent_activity.length === 0 ? (
+                                <p className="text-sm text-gray-400 italic">No recent activity found.</p>
+                            ) : (
+                                aiData.recent_activity.map((activity, idx) => (
+                                    <div key={idx} className="border-l-2 border-blue-500 pl-3">
+                                        <p className="text-xs font-bold text-gray-800">{activity.action}</p>
+                                        <p className="text-[10px] text-gray-500">{new Date(activity.time).toLocaleString()}</p>
                                     </div>
-                                </form>
-                            </div>
-
+                                ))
+                            )}
                         </div>
                     </div>
-                )}
+
+                </div>
 
             </div>
         </div>

@@ -3,6 +3,10 @@ from sqlalchemy.orm import relationship
 from database import Base
 import datetime
 
+# ==========================================
+# PHASE 1 & 2 MODELS (Core & Approvals)
+# ==========================================
+
 class User(Base):
     __tablename__ = "users"
     id = Column(Integer, primary_key=True, index=True)
@@ -65,3 +69,45 @@ class ApprovalHistory(Base):
 
     approval = relationship("Approval", back_populates="history")
     actor = relationship("User", foreign_keys=[action_by_id])
+
+
+# ==========================================
+# PHASE 3 MODELS (Enterprise Features)
+# ==========================================
+
+class Document(Base):
+    __tablename__ = "documents"
+    
+    id = Column(Integer, primary_key=True, index=True)
+    file_name = Column(String, index=True)
+    file_path = Column(String)
+    version = Column(Integer, default=1)
+    uploaded_by = Column(Integer, ForeignKey("users.id"))
+    task_id = Column(Integer, ForeignKey("tasks.id"), nullable=True) # Nullable so docs can be standalone
+    created_at = Column(DateTime, default=datetime.datetime.utcnow)
+
+    uploader = relationship("User", foreign_keys=[uploaded_by])
+    task = relationship("Task")
+
+class AuditLog(Base):
+    __tablename__ = "audit_logs"
+    
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id"))
+    action = Column(String) # e.g., "TASK_UPDATED", "DOCUMENT_UPLOADED"
+    entity = Column(String) # e.g., "Task", "Document"
+    entity_id = Column(Integer)
+    timestamp = Column(DateTime, default=datetime.datetime.utcnow)
+
+    user = relationship("User", foreign_keys=[user_id])
+
+class Notification(Base):
+    __tablename__ = "notifications"
+    
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id"))
+    message = Column(String)
+    is_read = Column(Boolean, default=False)
+    created_at = Column(DateTime, default=datetime.datetime.utcnow)
+
+    user = relationship("User", foreign_keys=[user_id])

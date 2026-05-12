@@ -1,7 +1,7 @@
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 from typing import List
-import models, schemas, auth, database
+import models, schemas, auth, database, services  # <-- Imported services
 
 router = APIRouter(prefix="/tasks", tags=["Tasks"])
 
@@ -12,6 +12,12 @@ def create_task(task: schemas.TaskCreate, db: Session = Depends(database.get_db)
     db.add(new_task)
     db.commit()
     db.refresh(new_task)
+    
+    # --- PHASE 3: Audit & Notifications ---
+    services.log_audit(db, current_user.id, "TASK_CREATED", "Task", new_task.id)
+    if new_task.assigned_to_id and new_task.assigned_to_id != current_user.id:
+        services.create_notification(db, new_task.assigned_to_id, f"You have been assigned a new task: {new_task.title}")
+
     return new_task
 
 @router.get("/", response_model=List[schemas.TaskResponse])
@@ -27,6 +33,10 @@ def get_tasks(db: Session = Depends(database.get_db), current_user: models.User 
 def update_task(task_id: int, updates: schemas.TaskUpdate, db: Session = Depends(database.get_db), current_user: models.User = Depends(auth.get_current_user)):
     task = db.query(models.Task).filter(models.Task.id == task_id).first()
     if not task: raise HTTPException(status_code=404, detail="Task not found")
+
+    # Track old state to know what changed
+    old_status = task.status
+    old_assignee = task.assigned_to_id
 
     # Kanban Strict Transition Rules
     valid_transitions = {
@@ -52,6 +62,18 @@ def update_task(task_id: int, updates: schemas.TaskUpdate, db: Session = Depends
         
     db.commit()
     db.refresh(task)
+
+    # --- PHASE 3: Audit & Notifications ---
+    services.log_audit(db, current_user.id, "TASK_UPDATED", "Task", task.id)
+    
+    # Notify creator if an employee moved the task status
+    if updates.status and old_status != task.status and task.created_by_id != current_user.id:
+        services.create_notification(db, task.created_by_id, f"Task '{task.title}' moved to {task.status}")
+        
+    # Notify new assignee if task was reassigned
+    if updates.assigned_to_id and old_assignee != task.assigned_to_id and task.assigned_to_id != current_user.id:
+        services.create_notification(db, task.assigned_to_id, f"You were reassigned to task: {task.title}")
+
     return task
 
 @router.delete("/{task_id}")
@@ -63,6 +85,10 @@ def delete_task(task_id: int, db: Session = Depends(database.get_db), current_us
 
     db.delete(task)
     db.commit()
+
+    # --- PHASE 3: Audit ---
+    services.log_audit(db, current_user.id, "TASK_DELETED", "Task", task_id)
+
     return {"message": "Task deleted successfully"}
 
 # --- COMMENTS API ---
@@ -79,6 +105,16 @@ def add_comment(task_id: int, comment: schemas.CommentCreate, db: Session = Depe
     db.add(new_comment)
     db.commit()
     db.refresh(new_comment)
+
+    # --- PHASE 3: Audit & Notifications ---
+    services.log_audit(db, current_user.id, "COMMENT_ADDED", "Task", task.id)
+    
+    # Notify assignee if someone else commented, otherwise notify creator
+    if task.assigned_to_id and task.assigned_to_id != current_user.id:
+        services.create_notification(db, task.assigned_to_id, f"New comment on your task: {task.title}")
+    elif task.created_by_id != current_user.id:
+        services.create_notification(db, task.created_by_id, f"New comment on a task you created: {task.title}")
+
     return new_comment
 
 @router.get("/{task_id}/comments", response_model=List[schemas.CommentResponse])
