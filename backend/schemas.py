@@ -13,6 +13,10 @@ class UserCreate(UserBase):
 
 class UserResponse(UserBase):
     id: int
+    
+    # 👇 PHASE 7 FIX: Allow React to see the user's organization 👇
+    organization_id: Optional[int] = None 
+    
     class Config:
         from_attributes = True
 
@@ -87,3 +91,33 @@ class ApprovalResponse(BaseModel):
     history: List[ApprovalHistoryResponse] = []
     class Config:
         from_attributes = True
+
+# --- PHASE 4: Password Reset Schemas ---
+class ForgotPasswordRequest(BaseModel):
+    email: str
+
+class ResetPasswordRequest(BaseModel):
+    token: str
+    new_password: str
+
+# --- PHASE 4: OAuth Schemas ---
+class GoogleLoginRequest(BaseModel):
+    token: str
+
+# --- PHASE 4: Pagination Schemas ---
+class AuditLogResponse(BaseModel):
+    id: int
+    user_id: int | None
+    action: str
+    entity: str | None
+    entity_id: int | None
+    timestamp: datetime
+
+    class Config:
+        from_attributes = True 
+
+class PaginatedAuditLogResponse(BaseModel):
+    total_items: int
+    total_pages: int
+    current_page: int
+    items: List[AuditLogResponse]

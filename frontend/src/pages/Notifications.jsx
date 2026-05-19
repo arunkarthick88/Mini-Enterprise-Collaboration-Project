@@ -1,20 +1,35 @@
 import { useState, useEffect } from 'react';
-import { useNavigate, Link } from 'react-router-dom';
+import { useNavigate } from 'react-router-dom';
 import { Bell, CheckCircle } from 'lucide-react';
 import api from '../api';
+import Navbar from '../components/Navbar'; // <-- IMPORT THE NEW NAVBAR
 
 export default function Notifications() {
     const [notifications, setNotifications] = useState([]);
+    
+    // Navbar State
+    const [user, setUser] = useState(null);
+    const [aiData, setAiData] = useState(null);
+    
     const navigate = useNavigate();
 
     useEffect(() => {
-        fetchNotifications();
+        fetchNavDataAndNotifications();
     }, []);
 
-    const fetchNotifications = async () => {
+    const fetchNavDataAndNotifications = async () => {
         try {
-            const res = await api.get('/notifications/');
-            setNotifications(res.data);
+            // Fetch User
+            const userRes = await api.get('/auth/me');
+            setUser(userRes.data);
+            
+            // Fetch AI Summary for Navbar
+            const aiRes = await api.get('/dashboard/ai-summary');
+            setAiData(aiRes.data);
+            
+            // Fetch Notifications list
+            const notifRes = await api.get('/notifications/');
+            setNotifications(notifRes.data);
         } catch (err) {
             navigate('/');
         }
@@ -23,22 +38,22 @@ export default function Notifications() {
     const markAsRead = async (id) => {
         try {
             await api.patch(`/notifications/${id}/read`);
-            fetchNotifications(); // Refresh list to remove the unread status
+            // Refresh everything so the Navbar bell number goes down instantly
+            fetchNavDataAndNotifications(); 
         } catch (err) {
             alert("Failed to update notification.");
         }
     };
 
+    if (!user) return <div className="min-h-screen flex items-center justify-center font-bold text-blue-600">Loading Inbox...</div>;
+
     return (
-        <div className="min-h-screen bg-gray-50">
-            <nav className="bg-blue-600 text-white p-4 flex justify-between items-center shadow-md mb-12">
-                <h1 className="text-2xl font-bold tracking-wide">TaskFlow</h1>
-                <div className="flex items-center gap-5 text-sm font-medium">
-                    <Link to="/dashboard" className="hover:text-blue-200 transition">Dashboard</Link>
-                    <Link to="/kanban" className="hover:text-blue-200 transition">Kanban</Link>
-                    <Link to="/notifications" className="underline font-bold text-white">Notifications</Link>
-                </div>
-            </nav>
+        <div className="min-h-screen bg-gray-50 pb-12">
+            
+            {/* <-- UNIFIED NAVBAR --> */}
+            <div className="mb-12">
+                <Navbar user={user} aiData={aiData} />
+            </div>
 
             <div className="max-w-3xl mx-auto p-4 space-y-4">
                 <div className="flex items-center gap-3 mb-8 px-2">

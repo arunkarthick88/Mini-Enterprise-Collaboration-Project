@@ -1,10 +1,15 @@
 import { useState, useEffect } from 'react';
-import { useNavigate, Link } from 'react-router-dom';
+import { useNavigate } from 'react-router-dom';
 import api from '../api';
+import Navbar from '../components/Navbar'; // <-- IMPORT THE NEW NAVBAR
 
 export default function Users() {
     const [users, setUsers] = useState([]);
+    
+    // Navbar State
     const [currentUser, setCurrentUser] = useState(null);
+    const [aiData, setAiData] = useState(null);
+    
     const navigate = useNavigate();
 
     useEffect(() => {
@@ -13,8 +18,15 @@ export default function Users() {
 
     const fetchUsers = async () => {
         try {
+            // Fetch User
             const me = await api.get('/auth/me');
             setCurrentUser(me.data);
+            
+            // Fetch AI Summary for Navbar
+            const aiRes = await api.get('/dashboard/ai-summary');
+            setAiData(aiRes.data);
+            
+            // Fetch User List
             const res = await api.get('/auth/users');
             setUsers(res.data);
         } catch (err) { navigate('/'); }
@@ -23,19 +35,12 @@ export default function Users() {
     if (!currentUser) return null;
 
     return (
-        <div className="min-h-screen bg-gray-50">
-            <nav className="bg-blue-600 text-white p-4 flex justify-between items-center shadow-md mb-12">
-                <h1 className="text-2xl font-bold tracking-wide">TaskFlow</h1>
-                <div className="flex items-center gap-4 text-sm font-medium">
-                    <Link to="/dashboard">Dashboard</Link>
-                    <Link to="/kanban">Kanban</Link>
-                    <Link to="/approvals">Approvals</Link>
-                    <Link to="/activity">Activity</Link>
-                    <Link to="/create-task">Create</Link>
-                    <Link to="/users" className="underline">Users</Link>
-                    <button onClick={() => { localStorage.removeItem('token'); navigate('/'); }} className="bg-red-500 px-4 py-1.5 rounded">Logout</button>
-                </div>
-            </nav>
+        <div className="min-h-screen bg-gray-50 pb-12">
+            
+            {/* <-- UNIFIED NAVBAR --> */}
+            <div className="mb-12">
+                <Navbar user={currentUser} aiData={aiData} />
+            </div>
 
             <div className="max-w-4xl mx-auto bg-white rounded-2xl shadow-xl overflow-hidden border border-gray-100">
                 <div className="p-6 border-b border-gray-100">

@@ -1,11 +1,15 @@
 from fastapi import APIRouter, Depends
 from sqlalchemy.orm import Session
 from database import get_db
-import models, auth
+import models, auth, services
+
+# --- NEW: Redis Cache Import ---
+from fastapi_cache.decorator import cache
 
 router = APIRouter(prefix="/dashboard", tags=["Dashboard Intelligence"])
 
 @router.get("/ai-summary")
+@cache(expire=60) # Caches the summary for 60 seconds
 def get_ai_summary(db: Session = Depends(get_db), current_user: models.User = Depends(auth.get_current_user)):
     
     # 1. Gather the User's Data Context
@@ -58,4 +62,21 @@ def get_ai_summary(db: Session = Depends(get_db), current_user: models.User = De
         "recent_activity": [
             {"action": log.action, "entity": log.entity, "time": log.timestamp} for log in recent_logs
         ]
+    }
+
+# --- PHASE 6: INTELLIGENT ANALYTICS ENDPOINT ---
+
+@router.get("/ai-insights")
+@cache(expire=300) # Caches insights for 5 minutes (less frequent change)
+async def get_enterprise_insights(db: Session = Depends(get_db), current_user: models.User = Depends(auth.role_required(["admin", "manager"]))):
+    """
+    Exposes advanced Phase 6 features: Delay Risk Detection and Smart Assignment.
+    Only accessible by privileged roles.
+    """
+    critical_alerts = services.get_ai_task_insights(db)
+    smart_assignment = services.get_smart_assignment_suggestions(db)
+    
+    return {
+        "critical_alerts": critical_alerts,
+        "smart_assignment": smart_assignment
     }

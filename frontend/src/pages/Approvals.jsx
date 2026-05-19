@@ -1,11 +1,16 @@
 import { useState, useEffect } from 'react';
-import { useNavigate, Link } from 'react-router-dom';
-import { ShieldCheck, LogOut, CheckCircle, XCircle, LayoutDashboard } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
+import { ShieldCheck, CheckCircle, XCircle } from 'lucide-react';
 import api from '../api';
+import Navbar from '../components/Navbar'; // <-- IMPORT THE NEW NAVBAR
 
 export default function Approvals() {
     const [approvals, setApprovals] = useState([]);
+    
+    // State for the Navbar
     const [user, setUser] = useState(null);
+    const [aiData, setAiData] = useState(null);
+    
     const navigate = useNavigate();
 
     // Form State
@@ -22,8 +27,15 @@ export default function Approvals() {
 
     const fetchUserAndApprovals = async () => {
         try {
+            // Fetch User
             const userRes = await api.get('/auth/me');
             setUser(userRes.data);
+            
+            // Fetch AI Summary (for Navbar Notifications)
+            const aiRes = await api.get('/dashboard/ai-summary');
+            setAiData(aiRes.data);
+            
+            // Fetch Approvals
             const appRes = await api.get('/approvals/');
             setApprovals(appRes.data);
         } catch (err) {
@@ -61,26 +73,23 @@ export default function Approvals() {
     if (!user) return <div className="min-h-screen flex items-center justify-center font-bold">Loading...</div>;
 
     return (
-        <div className="min-h-screen bg-gray-100 p-8">
-            <div className="max-w-5xl mx-auto">
+        <div className="min-h-screen bg-gray-50 pb-12">
+            
+            {/* <-- UNIFIED NAVBAR --> */}
+            <div className="mb-12">
+                <Navbar user={user} aiData={aiData} />
+            </div>
+
+            <div className="max-w-5xl mx-auto px-8">
                 
-                {/* HEADER */}
+                {/* PAGE HEADER */}
                 <div className="flex justify-between items-center mb-8 bg-white p-6 rounded-xl shadow-sm border border-gray-200">
                     <div className="flex items-center gap-3">
                         <div className="p-3 bg-purple-600 text-white rounded-lg"><ShieldCheck size={24} /></div>
                         <div>
                             <h1 className="text-2xl font-extrabold text-gray-900">Approval Center</h1>
-                            <p className="text-sm text-gray-500 font-medium">Multi-Level Authorization • {user.name}</p>
+                            <p className="text-sm text-gray-500 font-medium">Multi-Level Authorization</p>
                         </div>
-                    </div>
-                    <div className="flex items-center gap-4">
-                        <Link to="/dashboard" className="flex items-center gap-2 text-sm font-bold text-gray-500 hover:text-blue-600 transition bg-gray-50 px-3 py-2 rounded-lg border">
-                            <LayoutDashboard size={16} /> Kanban Board
-                        </Link>
-                        <span className="bg-purple-100 text-purple-800 px-4 py-1.5 rounded-lg text-xs font-black uppercase tracking-wider">{user.role}</span>
-                        <button onClick={() => { localStorage.removeItem('token'); navigate('/'); }} className="flex items-center gap-2 text-sm font-bold text-gray-500 hover:text-red-600 transition">
-                            <LogOut size={16} /> Logout
-                        </button>
                     </div>
                 </div>
 

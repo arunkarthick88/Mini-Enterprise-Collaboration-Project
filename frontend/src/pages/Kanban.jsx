@@ -1,8 +1,9 @@
 import { useState, useEffect } from 'react';
-import { useNavigate, Link } from 'react-router-dom';
+import { useNavigate } from 'react-router-dom';
 import { DragDropContext, Droppable, Draggable } from '@hello-pangea/dnd';
 import { Plus, Trash2, X, MessageSquare, Paperclip, Download, Loader2 } from 'lucide-react';
 import api from '../api';
+import Navbar from '../components/Navbar'; // <-- IMPORT THE NEW NAVBAR
 
 const COLUMNS = {
     todo: { name: 'To Do', color: 'border-gray-200 bg-gray-50' },
@@ -14,6 +15,7 @@ const COLUMNS = {
 export default function Kanban() {
     const [tasks, setTasks] = useState({ todo: [], in_progress: [], review: [], done: [] });
     const [user, setUser] = useState(null);
+    const [aiData, setAiData] = useState(null); // <-- Add AI Data state for Navbar
     const [usersList, setUsersList] = useState([]);
     const navigate = useNavigate();
 
@@ -33,14 +35,33 @@ export default function Kanban() {
     const [documents, setDocuments] = useState([]);
     const [isUploading, setIsUploading] = useState(false);
 
+    // Initial Fetch
     useEffect(() => {
         fetchUserAndTasks();
     }, []);
+
+    // --- PHASE 5: LIVE KANBAN LISTENER ---
+    useEffect(() => {
+        const handleLiveUpdate = () => {
+            fetchUserAndTasks();
+        };
+
+        // Listen for the custom event dispatched by App.jsx's WebSocket
+        window.addEventListener('kanban_updated', handleLiveUpdate);
+        
+        // Cleanup listener when component unmounts
+        return () => window.removeEventListener('kanban_updated', handleLiveUpdate);
+    }, []);
+    // -------------------------------------
 
     const fetchUserAndTasks = async () => {
         try {
             const userRes = await api.get('/auth/me');
             setUser(userRes.data);
+            
+            // Fetch AI Summary (for Navbar Notifications)
+            const aiRes = await api.get('/dashboard/ai-summary');
+            setAiData(aiRes.data);
 
             const taskRes = await api.get('/tasks/');
             
@@ -89,6 +110,7 @@ export default function Kanban() {
         const destCol = destination.droppableId;
         const taskId = parseInt(draggableId);
 
+        // Optimistic UI update
         const newTasks = { ...tasks };
         const [movedTask] = newTasks[sourceCol].splice(source.index, 1);
         movedTask.status = destCol;
@@ -148,12 +170,12 @@ export default function Kanban() {
             await api.post('/documents/upload', formData, {
                 headers: { 'Content-Type': 'multipart/form-data' }
             });
-            fetchDocuments(selectedTask.id); // Refresh doc list
+            fetchDocuments(selectedTask.id); 
         } catch (err) {
             alert('Failed to upload document.');
         } finally {
             setIsUploading(false);
-            e.target.value = null; // Clear input
+            e.target.value = null; 
         }
     };
 
@@ -177,21 +199,10 @@ export default function Kanban() {
     return (
         <div className="min-h-screen bg-gray-50 font-sans">
             
-            {/* TOP NAVBAR */}
-            <nav className="bg-blue-600 text-white p-4 flex justify-between items-center shadow-md mb-8">
-                <div>
-                    <h1 className="text-2xl font-bold tracking-wide">TaskFlow</h1>
-                    <p className="text-xs text-blue-200">{user.name} - {user.role}</p>
-                </div>
-                <div className="flex items-center gap-5 text-sm font-medium">
-                    <Link to="/dashboard" className="hover:text-blue-200 transition">Dashboard</Link>
-                    <Link to="/kanban" className="underline font-bold text-white">Kanban</Link>
-                    <Link to="/approvals" className="hover:text-blue-200 transition">Approvals</Link>
-                    <Link to="/activity" className="hover:text-blue-200 transition">Activity</Link>
-                    <Link to="/notifications" className="hover:text-blue-200 transition">Inbox</Link>
-                    <button onClick={() => { localStorage.removeItem('token'); navigate('/'); }} className="bg-red-500 hover:bg-red-600 text-white px-4 py-1.5 rounded transition">Logout</button>
-                </div>
-            </nav>
+            {/* <-- UNIFIED NAVBAR --> */}
+            <div className="mb-8">
+                <Navbar user={user} aiData={aiData} />
+            </div>
 
             <div className="max-w-7xl mx-auto px-8 pb-8">
                 

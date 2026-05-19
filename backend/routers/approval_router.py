@@ -1,12 +1,15 @@
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 from typing import List
-import models, schemas, auth, database, services  # <-- Imported services
+import models, schemas, auth, database, services  
+
+# --- PHASE 5: WebSocket Manager ---
+from websocket_manager import manager
 
 router = APIRouter(prefix="/approvals", tags=["Approvals"])
 
 @router.post("/", response_model=schemas.ApprovalResponse)
-def create_approval(approval: schemas.ApprovalCreate, db: Session = Depends(database.get_db), current_user: models.User = Depends(auth.get_current_user)):
+async def create_approval(approval: schemas.ApprovalCreate, db: Session = Depends(database.get_db), current_user: models.User = Depends(auth.get_current_user)):
     new_app = models.Approval(**approval.dict(), requested_by_id=current_user.id)
     db.add(new_app)
     db.commit()
@@ -16,24 +19,42 @@ def create_approval(approval: schemas.ApprovalCreate, db: Session = Depends(data
     services.log_audit(db, current_user.id, "APPROVAL_REQUESTED", "Approval", new_app.id)
     services.create_notification(db, current_user.id, f"Your approval request '{new_app.title}' has been successfully submitted.")
 
+    # --- PHASE 5: Live Notification to self ---
+    await manager.send_personal_message({
+        "type": "NOTIFICATION",
+        "message": f"Approval request '{new_app.title}' submitted.",
+    }, user_id=current_user.id)
+
     return new_app
 
 @router.get("/", response_model=List[schemas.ApprovalResponse])
 def get_approvals(db: Session = Depends(database.get_db), current_user: models.User = Depends(auth.get_current_user)):
+    """
+    PHASE 7 FIX: Multi-Tenant Filter.
+    Users only see approvals within their organization.
+    """
+    # Start the query filtered by organization_id
+    query = db.query(models.Approval).join(models.User, models.Approval.requested_by_id == models.User.id)\
+              .filter(models.User.organization_id == current_user.organization_id)
+
     if current_user.role == "admin":
-        return db.query(models.Approval).all()
+        return query.all()
     elif current_user.role == "manager":
-        return db.query(models.Approval).filter(
+        return query.filter(
             (models.Approval.requested_by_id == current_user.id) | 
             (models.Approval.current_level == "manager")
         ).all()
     else: # Employee
-        return db.query(models.Approval).filter(models.Approval.requested_by_id == current_user.id).all()
+        return query.filter(models.Approval.requested_by_id == current_user.id).all()
 
 @router.patch("/{approval_id}/action", response_model=schemas.ApprovalResponse)
-def take_approval_action(approval_id: int, action_data: schemas.ApprovalAction, db: Session = Depends(database.get_db), current_user: models.User = Depends(auth.role_required(["admin", "manager"]))):
-    approval = db.query(models.Approval).filter(models.Approval.id == approval_id).first()
-    if not approval: raise HTTPException(status_code=404, detail="Approval request not found")
+async def take_approval_action(approval_id: int, action_data: schemas.ApprovalAction, db: Session = Depends(database.get_db), current_user: models.User = Depends(auth.role_required(["admin", "manager"]))):
+    
+    # PHASE 7 FIX: Verify approval exists AND belongs to the user's organization
+    approval = db.query(models.Approval).join(models.User, models.Approval.requested_by_id == models.User.id)\
+                 .filter(models.Approval.id == approval_id, models.User.organization_id == current_user.organization_id).first()
+                 
+    if not approval: raise HTTPException(status_code=404, detail="Approval request not found or access denied")
 
     if action_data.action == "reject" and not action_data.comment:
         raise HTTPException(status_code=400, detail="A comment is strictly required when rejecting.")
@@ -47,7 +68,7 @@ def take_approval_action(approval_id: int, action_data: schemas.ApprovalAction, 
     else:
         approval.status = action_data.action # reject or hold
 
-    # Record the approval history (Phase 2 feature)
+    # Record the approval history
     history = models.ApprovalHistory(
         approval_id=approval.id,
         action_by_id=current_user.id,
@@ -59,10 +80,9 @@ def take_approval_action(approval_id: int, action_data: schemas.ApprovalAction, 
     db.refresh(approval)
 
     # --- PHASE 3: Audit & Notifications ---
-    # 1. Master Audit Trail
     services.log_audit(db, current_user.id, f"APPROVAL_{action_data.action.upper()}", "Approval", approval.id)
 
-    # 2. Notify the requester
+    # Notify the requester
     if approval.requested_by_id != current_user.id:
         if action_data.action == "approve" and approval.status == "pending":
             msg = f"Your approval '{approval.title}' was approved by your manager and escalated to Admin."
@@ -72,5 +92,11 @@ def take_approval_action(approval_id: int, action_data: schemas.ApprovalAction, 
             msg = f"Your approval '{approval.title}' was marked as {action_data.action}."
         
         services.create_notification(db, approval.requested_by_id, msg)
+        
+        # --- PHASE 5: Live Notification ---
+        await manager.send_personal_message({
+            "type": "NOTIFICATION",
+            "message": msg,
+        }, user_id=approval.requested_by_id)
 
     return approval

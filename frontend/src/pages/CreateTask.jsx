@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
-import { useNavigate, Link } from 'react-router-dom';
+import { useNavigate } from 'react-router-dom';
 import api from '../api';
+import Navbar from '../components/Navbar'; // <-- IMPORT THE NEW NAVBAR
 
 export default function CreateTask() {
     const [title, setTitle] = useState('');
@@ -9,7 +10,11 @@ export default function CreateTask() {
     const [status, setStatus] = useState('todo');
     const [assigneeId, setAssigneeId] = useState('');
     const [usersList, setUsersList] = useState([]);
+    
+    // Navbar State
     const [user, setUser] = useState(null);
+    const [aiData, setAiData] = useState(null);
+    
     const navigate = useNavigate();
 
     useEffect(() => {
@@ -18,13 +23,19 @@ export default function CreateTask() {
 
     const fetchData = async () => {
         try {
+            // Fetch User
             const userRes = await api.get('/auth/me');
             setUser(userRes.data);
+            
+            // Fetch AI Summary for Navbar
+            const aiRes = await api.get('/dashboard/ai-summary');
+            setAiData(aiRes.data);
+            
             if (userRes.data.role === 'admin' || userRes.data.role === 'manager') {
                 const usersRes = await api.get('/auth/users');
                 setUsersList(usersRes.data);
             } else {
-                navigate('/dashboard'); // Only management can create
+                navigate('/dashboard'); // Only management can create tasks
             }
         } catch (err) { navigate('/'); }
     };
@@ -43,18 +54,12 @@ export default function CreateTask() {
     if (!user) return null;
 
     return (
-        <div className="min-h-screen bg-gray-50">
-            <nav className="bg-blue-600 text-white p-4 flex justify-between items-center shadow-md mb-12">
-                <h1 className="text-2xl font-bold tracking-wide">TaskFlow</h1>
-                <div className="flex items-center gap-4 text-sm font-medium">
-                    <Link to="/dashboard">Dashboard</Link>
-                    <Link to="/kanban">Kanban</Link>
-                    <Link to="/approvals">Approvals</Link>
-                    <Link to="/activity">Activity</Link>
-                    <Link to="/create-task" className="underline">Create</Link>
-                    <button onClick={() => { localStorage.removeItem('token'); navigate('/'); }} className="bg-red-500 px-4 py-1.5 rounded">Logout</button>
-                </div>
-            </nav>
+        <div className="min-h-screen bg-gray-50 pb-12">
+            
+            {/* <-- UNIFIED NAVBAR --> */}
+            <div className="mb-12">
+                <Navbar user={user} aiData={aiData} />
+            </div>
 
             <div className="max-w-xl mx-auto bg-white p-10 rounded-2xl shadow-xl border border-gray-100">
                 <h2 className="text-2xl font-bold text-gray-800 mb-6">Create Task</h2>

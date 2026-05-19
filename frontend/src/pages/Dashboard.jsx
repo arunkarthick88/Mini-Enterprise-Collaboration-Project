@@ -1,14 +1,20 @@
 import { useState, useEffect } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { useNavigate } from 'react-router-dom';
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer } from 'recharts';
-import { Sparkles, Bell } from 'lucide-react';
+import { Sparkles, AlertTriangle, Users, Crown } from 'lucide-react';
 import api from '../api';
+import Navbar from '../components/Navbar'; // <-- IMPORT THE NEW NAVBAR
 
 export default function Dashboard() {
     const [user, setUser] = useState(null);
     const [tasks, setTasks] = useState([]);
     const [approvals, setApprovals] = useState([]);
     const [aiData, setAiData] = useState(null);
+    const [organization, setOrganization] = useState(null); // <-- State for Org/Billing details
+    
+    // --- PHASE 6: Insights State ---
+    const [insights, setInsights] = useState(null);
+    
     const navigate = useNavigate();
 
     useEffect(() => {
@@ -18,7 +24,14 @@ export default function Dashboard() {
     const fetchData = async () => {
         try {
             const userRes = await api.get('/auth/me');
-            setUser(userRes.data);
+            const currentUser = userRes.data;
+            setUser(currentUser);
+
+            // Fetch Organization details to get subscription status
+            if (currentUser.organization_id) {
+                const orgRes = await api.get(`/auth/organization/${currentUser.organization_id}`);
+                setOrganization(orgRes.data);
+            }
 
             const taskRes = await api.get('/tasks/');
             setTasks(taskRes.data);
@@ -26,18 +39,21 @@ export default function Dashboard() {
             const appRes = await api.get('/approvals/');
             setApprovals(appRes.data);
 
-            // Phase 3: Fetch the new AI Intelligence Data
+            // Phase 3: Fetch the standard AI Summary
             const aiRes = await api.get('/dashboard/ai-summary');
             setAiData(aiRes.data);
+
+            // Phase 6: Fetch Advanced Analytics for Managers/Admins
+            if (currentUser.role === 'admin' || currentUser.role === 'manager') {
+                const insightsRes = await api.get('/dashboard/ai-insights');
+                setInsights(insightsRes.data);
+            }
+
         } catch (err) {
+            console.error(err);
             localStorage.removeItem('token');
             navigate('/');
         }
-    };
-
-    const handleLogout = () => {
-        localStorage.removeItem('token');
-        navigate('/');
     };
 
     if (!user || !aiData) return <div className="min-h-screen flex items-center justify-center font-bold text-blue-600">Loading Enterprise Dashboard...</div>;
@@ -57,46 +73,30 @@ export default function Dashboard() {
     ];
 
     return (
-        <div className="min-h-screen bg-gray-50 font-sans">
+        <div className="min-h-screen bg-gray-50 font-sans pb-12">
             
-            {/* TOP NAVBAR */}
-            <nav className="bg-blue-600 text-white p-4 flex justify-between items-center shadow-md">
-                <div>
-                    <h1 className="text-2xl font-bold tracking-wide">TaskFlow</h1>
-                    <p className="text-xs text-blue-200">{user.name} - {user.role}</p>
-                </div>
-                <div className="flex items-center gap-5 text-sm font-medium">
-                    <Link to="/dashboard" className="underline hover:text-blue-200 transition">Dashboard</Link>
-                    <Link to="/kanban" className="hover:text-blue-200 transition">Kanban</Link>
-                    <Link to="/approvals" className="hover:text-blue-200 transition">Approvals</Link>
-                    <Link to="/activity" className="hover:text-blue-200 transition">Activity</Link>
-                    <Link to="/create-task" className="hover:text-blue-200 transition">Create</Link>
-                    {(user.role === 'admin' || user.role === 'manager') && (
-                        <Link to="/users" className="hover:text-blue-200 transition">Users</Link>
-                    )}
-                    
-                    {/* NOTIFICATION BELL - FIXED WITH <Link> */}
-                    <Link to="/notifications" className="relative cursor-pointer hover:text-blue-200 transition ml-2 flex items-center">
-                        <Bell size={20} />
-                        {aiData.unread_notifications > 0 && (
-                            <span className="absolute -top-2 -right-2 bg-red-500 text-white text-[10px] font-bold w-4 h-4 flex items-center justify-center rounded-full shadow">
-                                {aiData.unread_notifications}
-                            </span>
-                        )}
-                    </Link>
-
-                    <button onClick={handleLogout} className="bg-red-500 hover:bg-red-600 text-white px-4 py-1.5 rounded transition ml-2">Logout</button>
-                </div>
-            </nav>
+            {/* <-- UNIFIED NAVBAR --> */}
+            <Navbar user={user} aiData={aiData} />
 
             <div className="max-w-7xl mx-auto p-8">
                 
-                {/* HEADER SECTION */}
+                {/* HEADER SECTION with Subscription Badge */}
                 <div className="flex justify-between items-end mb-6">
                     <div>
                         <h2 className="text-3xl font-bold text-gray-800">Dashboard</h2>
                         <p className="text-gray-500 mt-1">Enterprise Overview</p>
                     </div>
+                    
+                    {/* Display current subscription plan */}
+                    {organization && organization.subscription_plan && (
+                        <div className="flex items-center gap-2 bg-gradient-to-r from-blue-50 to-indigo-50 border border-blue-100 px-4 py-2 rounded-xl shadow-sm">
+                            <Crown size={18} className={`${organization.subscription_plan === 'gold' ? 'text-yellow-500' : organization.subscription_plan === 'silver' ? 'text-gray-400' : 'text-blue-500'}`} />
+                            <span className="text-sm font-bold text-gray-700 capitalize">{organization.subscription_plan} Plan</span>
+                            <span className="bg-blue-100 text-blue-800 text-[10px] font-black px-2 py-0.5 rounded ml-2">
+                                {organization.ai_credits} AI Credits
+                            </span>
+                        </div>
+                    )}
                 </div>
 
                 {/* 🤖 AI INSIGHT BANNER */}
@@ -109,6 +109,53 @@ export default function Dashboard() {
                         <p className="text-lg font-medium leading-relaxed">{aiData.ai_insight}</p>
                     </div>
                 </div>
+
+                {/* --- PHASE 6: ENTERPRISE ANALYTICS (Admin/Manager Only) --- */}
+                {insights && (
+                    <div className="mb-8">
+                        <h3 className="text-xl font-bold text-gray-800 mb-4 border-b pb-2">Enterprise Analytics</h3>
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                            
+                            {/* Smart Assignment Guide */}
+                            <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-100">
+                                <h4 className="font-bold text-gray-800 mb-4 flex items-center gap-2">
+                                    <Users size={18} className="text-blue-500"/> Smart Assignment Guide
+                                </h4>
+                                <div className="space-y-3 max-h-48 overflow-y-auto pr-2">
+                                    {insights.smart_assignment?.map(emp => (
+                                        <div key={emp.user_id} className="flex justify-between items-center p-3 bg-gray-50 rounded-lg border border-gray-100">
+                                            <span className="text-sm font-medium text-gray-700">{emp.name}</span>
+                                            <span className={`text-[10px] px-2.5 py-1 rounded-full font-bold uppercase ${emp.status === 'Available' ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>
+                                                {emp.active_tasks} Active • {emp.status}
+                                            </span>
+                                        </div>
+                                    ))}
+                                    {insights.smart_assignment?.length === 0 && <p className="text-sm text-gray-400 italic">No employees found.</p>}
+                                </div>
+                            </div>
+
+                            {/* Delay Risk Detection */}
+                            <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-100">
+                                <h4 className="font-bold text-gray-800 mb-4 text-red-600 flex items-center gap-2">
+                                    <AlertTriangle size={18} /> Delay Risk Detection
+                                </h4>
+                                <div className="space-y-2 max-h-48 overflow-y-auto pr-2">
+                                    {insights.critical_alerts?.map((alert, i) => {
+                                        // Simple check to color code the fallback message vs actual risks
+                                        const isRisk = alert.includes("🚨");
+                                        return (
+                                            <p key={i} className={`text-sm p-3 rounded-lg border-l-4 ${isRisk ? 'border-red-500 bg-red-50 text-red-800' : 'border-green-500 bg-green-50 text-green-800'}`}>
+                                                {alert}
+                                            </p>
+                                        );
+                                    })}
+                                </div>
+                            </div>
+                            
+                        </div>
+                    </div>
+                )}
+                {/* -------------------------------------------------------- */}
 
                 {/* STAT CARDS */}
                 <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8 text-white">
