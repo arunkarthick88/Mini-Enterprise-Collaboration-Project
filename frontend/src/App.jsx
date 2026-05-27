@@ -12,7 +12,15 @@ import CreateTask from './pages/CreateTask';
 import Users from './pages/Users';
 import ActivityLog from './pages/ActivityLog';
 import Notifications from './pages/Notifications';
-import Pricing from './pages/Pricing'; // <-- PHASE 7: IMPORT PRICING PAGE
+import Pricing from './pages/Pricing'; 
+
+// --- PHASE 9: NEW GOVERNANCE PAGES ---
+import SlaRules from './pages/SlaRules';
+import SlaDashboard from './pages/SlaDashboard';
+import ApprovalEscalations from './pages/ApprovalEscalations';
+import ApprovalDelegations from './pages/ApprovalDelegations';
+import NotificationPreferences from './pages/NotificationPreferences'; // <-- NEW IMPORT
+// -------------------------------------
 
 // --- PHASE 5: Global WebSocket Listener ---
 function GlobalWebSocket() {
@@ -88,7 +96,14 @@ export default function App() {
                 <Route path="/users" element={<PrivateRoute><Users /></PrivateRoute>} />
                 <Route path="/activity" element={<PrivateRoute><ActivityLog /></PrivateRoute>} />
                 <Route path="/notifications" element={<PrivateRoute><Notifications /></PrivateRoute>} />
-                <Route path="/pricing" element={<PrivateRoute><Pricing /></PrivateRoute>} /> {/* <-- PHASE 7: ADD ROUTE */}
+                <Route path="/pricing" element={<PrivateRoute><Pricing /></PrivateRoute>} /> 
+                
+                {/* --- PHASE 9: SLA & GOVERNANCE ROUTES --- */}
+                <Route path="/sla-rules" element={<PrivateRoute><SlaRules /></PrivateRoute>} />
+                <Route path="/sla-dashboard" element={<PrivateRoute><SlaDashboard /></PrivateRoute>} />
+                <Route path="/approval-escalations" element={<PrivateRoute><ApprovalEscalations /></PrivateRoute>} />
+                <Route path="/approval-delegations" element={<PrivateRoute><ApprovalDelegations /></PrivateRoute>} />
+                <Route path="/notification-preferences" element={<PrivateRoute><NotificationPreferences /></PrivateRoute>} /> {/* <-- NEW ROUTE */}
             </Routes>
         </BrowserRouter>
     );

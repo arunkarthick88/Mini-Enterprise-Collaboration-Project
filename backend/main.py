@@ -67,7 +67,9 @@ from routers import (
     notification_router, 
     document_router, 
     dashboard_router,
-    billing_router # <-- PHASE 7: NEW BILLING ROUTER
+    billing_router, 
+    sla_router,         # <-- PHASE 9: SLA ROUTER
+    governance_router   # <-- PHASE 9: GOVERNANCE ROUTER
 )
 
 app.include_router(auth_router.router)
@@ -77,7 +79,9 @@ app.include_router(audit_router.router)
 app.include_router(notification_router.router)
 app.include_router(document_router.router)
 app.include_router(dashboard_router.router)
-app.include_router(billing_router.router) # <-- PHASE 7: REGISTER BILLING ROUTER
+app.include_router(billing_router.router) 
+app.include_router(sla_router.router)       # <-- PHASE 9: REGISTER SLA ROUTER
+app.include_router(governance_router.router) # <-- PHASE 9: REGISTER GOVERNANCE ROUTER
 
 
 # --- PHASE 5: REAL-TIME WEBSOCKET ENDPOINT ---

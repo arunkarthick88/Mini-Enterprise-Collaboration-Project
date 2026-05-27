@@ -70,6 +70,19 @@ def get_current_user(token: str = Depends(oauth2_scheme), db: Session = Depends(
     if user is None: raise credentials_exception
     return user
 
+# --- PHASE 9: Admin Verification Logic ---
+async def get_current_admin(current_user: models.User = Depends(get_current_user)):
+    """
+    Dependency that ensures the currently authenticated user has the 'admin' role.
+    """
+    if current_user.role != "admin":
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="You do not have permission to perform this action. Admin access required."
+        )
+    return current_user
+# -----------------------------------------
+
 # RBAC Decorator Logic
 def role_required(allowed_roles: list):
     def role_checker(current_user: models.User = Depends(get_current_user)):

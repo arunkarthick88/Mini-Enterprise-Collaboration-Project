@@ -1,5 +1,5 @@
 from pydantic import BaseModel
-from typing import Optional, List
+from typing import Optional, List, Dict, Any
 from datetime import datetime
 
 # --- USER SCHEMAS ---
@@ -13,10 +13,7 @@ class UserCreate(UserBase):
 
 class UserResponse(UserBase):
     id: int
-    
-    # 👇 PHASE 7 FIX: Allow React to see the user's organization 👇
     organization_id: Optional[int] = None 
-    
     class Config:
         from_attributes = True
 
@@ -58,6 +55,12 @@ class TaskResponse(TaskBase):
     created_by_id: int
     updated_by_id: Optional[int] = None
     comments: List[CommentResponse] = [] 
+    
+    # PHASE 9 SLA ADDITIONS
+    sla_status: Optional[str] = None
+    sla_due_time: Optional[datetime] = None
+    is_sla_breached: Optional[bool] = False # <-- FIX: Changed to Optional[bool]
+    
     class Config:
         from_attributes = True
 
@@ -77,8 +80,8 @@ class ApprovalCreate(BaseModel):
     description: str
 
 class ApprovalAction(BaseModel):
-    action: str # approve, reject, hold
-    comment: str # Mandatory for rejection
+    action: str 
+    comment: str 
 
 class ApprovalResponse(BaseModel):
     id: int
@@ -89,10 +92,17 @@ class ApprovalResponse(BaseModel):
     current_level: str
     created_at: datetime
     history: List[ApprovalHistoryResponse] = []
+    
+    # PHASE 9 SLA & ESCALATION ADDITIONS
+    sla_status: Optional[str] = None
+    sla_due_time: Optional[datetime] = None
+    is_escalated: Optional[bool] = False # <-- FIX: Changed to Optional[bool]
+    current_escalation_to: Optional[int] = None
+    
     class Config:
         from_attributes = True
 
-# --- PHASE 4: Password Reset Schemas ---
+# --- PHASE 4: Auth & Pagination Schemas ---
 class ForgotPasswordRequest(BaseModel):
     email: str
 
@@ -100,11 +110,9 @@ class ResetPasswordRequest(BaseModel):
     token: str
     new_password: str
 
-# --- PHASE 4: OAuth Schemas ---
 class GoogleLoginRequest(BaseModel):
     token: str
 
-# --- PHASE 4: Pagination Schemas ---
 class AuditLogResponse(BaseModel):
     id: int
     user_id: int | None
@@ -112,6 +120,14 @@ class AuditLogResponse(BaseModel):
     entity: str | None
     entity_id: int | None
     timestamp: datetime
+    
+    # PHASE 9 AUDIT ADDITIONS
+    module_name: Optional[str] = None
+    action_type: Optional[str] = None
+    old_data: Optional[Dict[str, Any]] = None
+    new_data: Optional[Dict[str, Any]] = None
+    ip_address: Optional[str] = None
+    user_agent: Optional[str] = None
 
     class Config:
         from_attributes = True 
@@ -121,3 +137,93 @@ class PaginatedAuditLogResponse(BaseModel):
     total_pages: int
     current_page: int
     items: List[AuditLogResponse]
+
+# ==========================================
+# --- PHASE 9: NEW GOVERNANCE SCHEMAS ---
+# ==========================================
+
+# 1. SLA Rules
+class SLARuleBase(BaseModel):
+    module_name: str
+    priority: str
+    allowed_hours: int
+    escalation_enabled: bool = False
+    escalation_after_hours: Optional[int] = None
+    is_active: bool = True
+
+class SLARuleCreate(SLARuleBase):
+    pass
+
+class SLARuleResponse(SLARuleBase):
+    id: int
+    created_by: int
+    created_at: datetime
+    class Config:
+        from_attributes = True
+
+# 2. SLA Tracking
+class SLATrackingResponse(BaseModel):
+    id: int
+    module_name: str
+    record_id: int
+    sla_rule_id: int
+    start_time: datetime
+    due_time: datetime
+    completed_time: Optional[datetime] = None
+    status: str
+    breach_reason: Optional[str] = None
+    class Config:
+        from_attributes = True
+
+# 3. Approval Escalations
+class ApprovalEscalationCreate(BaseModel):
+    approval_id: int
+    escalated_to: int
+    reason: str
+
+class ApprovalEscalationResponse(BaseModel):
+    id: int
+    approval_id: int
+    escalated_from: int
+    escalated_to: int
+    reason: str
+    escalation_level: int
+    status: str
+    escalated_at: datetime
+    resolved_at: Optional[datetime] = None
+    class Config:
+        from_attributes = True
+
+# 4. Approval Delegations
+class ApprovalDelegationCreate(BaseModel):
+    delegatee_id: int
+    start_date: datetime
+    end_date: datetime
+    reason: str
+
+class ApprovalDelegationResponse(BaseModel):
+    id: int
+    delegator_id: int
+    delegatee_id: int
+    start_date: datetime
+    end_date: datetime
+    reason: str
+    is_active: bool
+    created_at: datetime
+    class Config:
+        from_attributes = True
+
+# 5. Notification Preferences
+class NotificationPreferenceUpdate(BaseModel):
+    in_app_enabled: bool
+    email_enabled: bool
+    task_notifications: bool
+    approval_notifications: bool
+    escalation_notifications: bool
+    document_notifications: bool
+
+class NotificationPreferenceResponse(NotificationPreferenceUpdate):
+    id: int
+    user_id: int
+    class Config:
+        from_attributes = True
