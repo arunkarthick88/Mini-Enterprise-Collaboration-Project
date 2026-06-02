@@ -227,3 +227,126 @@ class NotificationPreferenceResponse(NotificationPreferenceUpdate):
     user_id: int
     class Config:
         from_attributes = True
+
+
+# ==========================================
+# --- PHASE 10A: SAAS & TENANT SCHEMAS ---
+# ==========================================
+
+# Tenant Schemas
+class TenantBase(BaseModel):
+    name: str
+    contact_email: str
+    phone: Optional[str] = None
+    address: Optional[str] = None
+    industry: Optional[str] = None
+
+class TenantCreate(TenantBase):
+    pass
+
+class TenantResponse(TenantBase):
+    id: int
+    slug: str
+    status: str
+    created_at: datetime
+    class Config:
+        from_attributes = True
+
+# Tenant Onboarding & Settings
+class TenantOnboardingResponse(BaseModel):
+    id: int
+    tenant_id: int
+    admin_user_id: int
+    onboarding_status: str
+    default_workspace_created: bool
+    settings_created: bool
+    class Config:
+        from_attributes = True
+
+class TenantSettingsUpdate(BaseModel):
+    max_workspaces: int
+    max_channels_per_workspace: int
+    max_workspace_members: int
+    max_storage_mb: int
+    workspace_enabled: bool
+    channel_enabled: bool
+
+class TenantSettingsResponse(TenantSettingsUpdate):
+    id: int
+    tenant_id: int
+    class Config:
+        from_attributes = True
+
+class TenantUsageResponse(BaseModel):
+    id: int
+    tenant_id: int
+    workspace_count: int
+    channel_count: int
+    member_count: int
+    storage_used_mb: int
+    last_calculated_at: datetime
+    class Config:
+        from_attributes = True
+
+# Workspace Schemas
+class WorkspaceBase(BaseModel):
+    name: str
+    description: Optional[str] = None
+    visibility: str = "PRIVATE"
+    avatar_url: Optional[str] = None
+
+class WorkspaceCreate(WorkspaceBase):
+    pass
+
+class WorkspaceResponse(WorkspaceBase):
+    id: int
+    tenant_id: int
+    slug: str
+    created_by: int
+    is_archived: bool
+    created_at: datetime
+    class Config:
+        from_attributes = True
+
+# Workspace Member Schemas
+class WorkspaceMemberCreate(BaseModel):
+    user_id: int
+    role: str = "Member"
+
+class WorkspaceMemberResponse(BaseModel):
+    id: int
+    workspace_id: int
+    user_id: int
+    role: str
+    joined_at: datetime
+    is_active: bool
+    class Config:
+        from_attributes = True
+
+# Channel Schemas
+class ChannelBase(BaseModel):
+    name: str
+    description: Optional[str] = None
+    type: str = "PUBLIC"
+
+class ChannelCreate(ChannelBase):
+    pass
+
+class ChannelResponse(ChannelBase):
+    id: int
+    tenant_id: int
+    workspace_id: int
+    created_by: int
+    is_archived: bool
+    created_at: datetime
+    class Config:
+        from_attributes = True
+
+class ChannelMemberResponse(BaseModel):
+    id: int
+    channel_id: int
+    user_id: int
+    joined_at: datetime
+    is_muted: bool
+    class Config:
+        from_attributes = True

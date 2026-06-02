@@ -68,8 +68,11 @@ from routers import (
     document_router, 
     dashboard_router,
     billing_router, 
-    sla_router,         # <-- PHASE 9: SLA ROUTER
-    governance_router   # <-- PHASE 9: GOVERNANCE ROUTER
+    sla_router,
+    governance_router,
+    tenant_router,      # <-- PHASE 10A: TENANTS
+    workspace_router,   # <-- PHASE 10A: WORKSPACES
+    channel_router      # <-- PHASE 10A: CHANNELS
 )
 
 app.include_router(auth_router.router)
@@ -80,8 +83,11 @@ app.include_router(notification_router.router)
 app.include_router(document_router.router)
 app.include_router(dashboard_router.router)
 app.include_router(billing_router.router) 
-app.include_router(sla_router.router)       # <-- PHASE 9: REGISTER SLA ROUTER
-app.include_router(governance_router.router) # <-- PHASE 9: REGISTER GOVERNANCE ROUTER
+app.include_router(sla_router.router)
+app.include_router(governance_router.router)
+app.include_router(tenant_router.router)    # <-- REGISTER TENANT ROUTER
+app.include_router(workspace_router.router) # <-- REGISTER WORKSPACE ROUTER
+app.include_router(channel_router.router)   # <-- REGISTER CHANNEL ROUTER
 
 
 # --- PHASE 5: REAL-TIME WEBSOCKET ENDPOINT ---

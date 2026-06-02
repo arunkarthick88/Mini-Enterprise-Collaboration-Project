@@ -19,7 +19,12 @@ import SlaRules from './pages/SlaRules';
 import SlaDashboard from './pages/SlaDashboard';
 import ApprovalEscalations from './pages/ApprovalEscalations';
 import ApprovalDelegations from './pages/ApprovalDelegations';
-import NotificationPreferences from './pages/NotificationPreferences'; // <-- NEW IMPORT
+import NotificationPreferences from './pages/NotificationPreferences';
+
+// --- PHASE 10A: SAAS & WORKSPACES ---
+import Tenants from './pages/Tenants';
+import Workspaces from './pages/Workspaces';
+import WorkspaceView from './pages/WorkspaceView'; // <-- NEW IMPORT
 // -------------------------------------
 
 // --- PHASE 5: Global WebSocket Listener ---
@@ -103,7 +108,12 @@ export default function App() {
                 <Route path="/sla-dashboard" element={<PrivateRoute><SlaDashboard /></PrivateRoute>} />
                 <Route path="/approval-escalations" element={<PrivateRoute><ApprovalEscalations /></PrivateRoute>} />
                 <Route path="/approval-delegations" element={<PrivateRoute><ApprovalDelegations /></PrivateRoute>} />
-                <Route path="/notification-preferences" element={<PrivateRoute><NotificationPreferences /></PrivateRoute>} /> {/* <-- NEW ROUTE */}
+                <Route path="/notification-preferences" element={<PrivateRoute><NotificationPreferences /></PrivateRoute>} />
+
+                {/* --- PHASE 10A: SAAS & TENANT ROUTES --- */}
+                <Route path="/tenants" element={<PrivateRoute><Tenants /></PrivateRoute>} />
+                <Route path="/workspaces" element={<PrivateRoute><Workspaces /></PrivateRoute>} />
+                <Route path="/workspaces/:id" element={<PrivateRoute><WorkspaceView /></PrivateRoute>} /> {/* <-- NEW ROUTE */}
             </Routes>
         </BrowserRouter>
     );

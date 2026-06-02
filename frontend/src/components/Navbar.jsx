@@ -32,6 +32,13 @@ export default function Navbar({ user, aiData }) {
                 <Link to="/dashboard" className="hover:text-blue-200 transition">Dashboard</Link>
                 <Link to="/kanban" className="hover:text-blue-200 transition">Kanban</Link>
                 <Link to="/approvals" className="hover:text-blue-200 transition">Approvals</Link>
+
+                {/* --- PHASE 10A LINKS --- */}
+                <Link to="/workspaces" className="hover:text-blue-200 transition font-bold text-indigo-200">Workspaces</Link>
+                {isAdmin && (
+                    <Link to="/tenants" className="hover:text-blue-200 transition font-bold text-red-300">SaaS Admin</Link>
+                )}
+                {/* ------------------------- */}
                 
                 {/* 🛡️ GOVERNANCE DROPDOWN (Phase 9) */}
                 <div className="relative">

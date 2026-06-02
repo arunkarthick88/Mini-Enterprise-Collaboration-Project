@@ -20,6 +20,10 @@ class User(Base):
     organization = relationship("Organization", back_populates="users")
     # -------------------------------------
 
+    # --- PHASE 10A: SAAS Tenant ---
+    tenant_id = Column(Integer, ForeignKey("tenants.id"), nullable=True, index=True)
+    # -------------------------------------
+
     tasks_created = relationship("Task", foreign_keys="[Task.created_by_id]", back_populates="creator")
     tasks_assigned = relationship("Task", foreign_keys="[Task.assigned_to_id]", back_populates="assignee")
 
@@ -230,3 +234,99 @@ class NotificationPreference(Base):
     document_notifications = Column(Boolean, default=True)
     created_at = Column(DateTime, default=datetime.datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.datetime.utcnow, onupdate=datetime.datetime.utcnow)
+
+# ==========================================
+# --- PHASE 10A: SAAS & MULTI-TENANCY ---
+# ==========================================
+
+class Tenant(Base):
+    __tablename__ = "tenants"
+    id = Column(Integer, primary_key=True, index=True)
+    name = Column(String, index=True)
+    slug = Column(String, unique=True, index=True)
+    contact_email = Column(String, unique=True, index=True)
+    phone = Column(String, nullable=True)
+    address = Column(String, nullable=True)
+    industry = Column(String, nullable=True)
+    status = Column(String, default="ACTIVE") # ACTIVE, SUSPENDED, TRIAL, CANCELLED
+    created_at = Column(DateTime, default=datetime.datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.datetime.utcnow, onupdate=datetime.datetime.utcnow)
+
+class TenantOnboarding(Base):
+    __tablename__ = "tenant_onboarding"
+    id = Column(Integer, primary_key=True, index=True)
+    tenant_id = Column(Integer, ForeignKey("tenants.id"))
+    admin_user_id = Column(Integer, ForeignKey("users.id"))
+    onboarding_status = Column(String, default="PENDING") # PENDING, COMPLETED, FAILED
+    default_workspace_created = Column(Boolean, default=False)
+    settings_created = Column(Boolean, default=False)
+    completed_at = Column(DateTime, nullable=True)
+    created_at = Column(DateTime, default=datetime.datetime.utcnow)
+
+class TenantCollaborationSetting(Base):
+    __tablename__ = "tenant_collaboration_settings"
+    id = Column(Integer, primary_key=True, index=True)
+    tenant_id = Column(Integer, ForeignKey("tenants.id"), unique=True)
+    max_workspaces = Column(Integer, default=5)
+    max_channels_per_workspace = Column(Integer, default=20)
+    max_workspace_members = Column(Integer, default=50)
+    max_storage_mb = Column(Integer, default=5000) # 5GB Default
+    workspace_enabled = Column(Boolean, default=True)
+    channel_enabled = Column(Boolean, default=True)
+    created_at = Column(DateTime, default=datetime.datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.datetime.utcnow, onupdate=datetime.datetime.utcnow)
+
+class TenantCollaborationUsage(Base):
+    __tablename__ = "tenant_collaboration_usage"
+    id = Column(Integer, primary_key=True, index=True)
+    tenant_id = Column(Integer, ForeignKey("tenants.id"), unique=True)
+    workspace_count = Column(Integer, default=0)
+    channel_count = Column(Integer, default=0)
+    member_count = Column(Integer, default=0)
+    storage_used_mb = Column(Integer, default=0)
+    last_calculated_at = Column(DateTime, default=datetime.datetime.utcnow)
+
+class Workspace(Base):
+    __tablename__ = "workspaces"
+    id = Column(Integer, primary_key=True, index=True)
+    tenant_id = Column(Integer, ForeignKey("tenants.id"))
+    name = Column(String, index=True)
+    slug = Column(String, index=True)
+    description = Column(String, nullable=True)
+    avatar_url = Column(String, nullable=True)
+    visibility = Column(String, default="PRIVATE") # PUBLIC or PRIVATE
+    created_by = Column(Integer, ForeignKey("users.id"))
+    is_archived = Column(Boolean, default=False)
+    created_at = Column(DateTime, default=datetime.datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.datetime.utcnow, onupdate=datetime.datetime.utcnow)
+
+class WorkspaceMember(Base):
+    __tablename__ = "workspace_members"
+    id = Column(Integer, primary_key=True, index=True)
+    workspace_id = Column(Integer, ForeignKey("workspaces.id"))
+    user_id = Column(Integer, ForeignKey("users.id"))
+    role = Column(String, default="Member") # Workspace Admin, Moderator, Member, Viewer
+    joined_at = Column(DateTime, default=datetime.datetime.utcnow)
+    is_active = Column(Boolean, default=True)
+
+class Channel(Base):
+    __tablename__ = "channels"
+    id = Column(Integer, primary_key=True, index=True)
+    tenant_id = Column(Integer, ForeignKey("tenants.id"))
+    workspace_id = Column(Integer, ForeignKey("workspaces.id"))
+    name = Column(String, index=True)
+    description = Column(String, nullable=True)
+    type = Column(String, default="PUBLIC") # PUBLIC, PRIVATE, ANNOUNCEMENT, PROJECT
+    created_by = Column(Integer, ForeignKey("users.id"))
+    is_archived = Column(Boolean, default=False)
+    created_at = Column(DateTime, default=datetime.datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.datetime.utcnow, onupdate=datetime.datetime.utcnow)
+
+class ChannelMember(Base):
+    __tablename__ = "channel_members"
+    id = Column(Integer, primary_key=True, index=True)
+    channel_id = Column(Integer, ForeignKey("channels.id"))
+    user_id = Column(Integer, ForeignKey("users.id"))
+    joined_at = Column(DateTime, default=datetime.datetime.utcnow)
+    is_muted = Column(Boolean, default=False)
+    last_read_message_id = Column(Integer, nullable=True) # Pre-configured for Phase 10B Chat
