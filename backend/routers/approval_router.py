@@ -1,6 +1,10 @@
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Form
+from fastapi.responses import FileResponse
 from sqlalchemy.orm import Session
 from typing import List
+import os
+import shutil
+import datetime
 import models, schemas, auth, database, services  
 
 # --- PHASE 5: WebSocket Manager ---
@@ -8,9 +12,22 @@ from websocket_manager import manager
 
 router = APIRouter(prefix="/approvals", tags=["Approvals"])
 
+# --- Setup File Upload Directory ---
+UPLOAD_DIR = "uploads/approval_documents"
+os.makedirs(UPLOAD_DIR, exist_ok=True)
+
+
+# ==========================================
+# 1. APPROVAL CRUD & WORKFLOW
+# ==========================================
+
 @router.post("/", response_model=schemas.ApprovalResponse)
 async def create_approval(approval: schemas.ApprovalCreate, db: Session = Depends(database.get_db), current_user: models.User = Depends(auth.get_current_user)):
-    new_app = models.Approval(**approval.dict(), requested_by_id=current_user.id)
+    new_app = models.Approval(
+        **approval.dict(), 
+        requested_by_id=current_user.id,
+        tenant_id=current_user.tenant_id # <-- PHASE 10A SaaS Addition
+    )
     db.add(new_app)
     db.commit()
     db.refresh(new_app)
@@ -100,3 +117,78 @@ async def take_approval_action(approval_id: int, action_data: schemas.ApprovalAc
         }, user_id=approval.requested_by_id)
 
     return approval
+
+
+# ==========================================
+# 2. PHASE 10B: APPROVAL DOCUMENTS API
+# ==========================================
+
+@router.post("/{approval_id}/documents", response_model=schemas.ApprovalDocumentResponse)
+async def upload_approval_document(
+    approval_id: int, 
+    file: UploadFile = File(...), 
+    document_type: str = Form("REFERENCE"), 
+    db: Session = Depends(database.get_db), 
+    current_user: models.User = Depends(auth.get_current_user)
+):
+    approval = db.query(models.Approval).filter(models.Approval.id == approval_id).first()
+    if not approval:
+        raise HTTPException(status_code=404, detail="Approval not found")
+
+    # Save file locally
+    file_location = f"{UPLOAD_DIR}/{approval_id}_{datetime.datetime.utcnow().timestamp()}_{file.filename}"
+    with open(file_location, "wb+") as file_object:
+        shutil.copyfileobj(file.file, file_object)
+
+    file_size = os.path.getsize(file_location)
+
+    new_doc = models.ApprovalDocument(
+        tenant_id=current_user.tenant_id,
+        approval_id=approval_id,
+        file_name=file.filename,
+        file_path=file_location,
+        file_size=file_size,
+        mime_type=file.content_type,
+        uploaded_by=current_user.id,
+        document_type=document_type
+    )
+    db.add(new_doc)
+    db.commit()
+    db.refresh(new_doc)
+    
+    services.log_audit(db, current_user.id, "APPROVAL_DOCUMENT_UPLOADED", "ApprovalDocument", new_doc.id)
+    return new_doc
+
+@router.get("/{approval_id}/documents", response_model=List[schemas.ApprovalDocumentResponse])
+def get_approval_documents(approval_id: int, db: Session = Depends(database.get_db), current_user: models.User = Depends(auth.get_current_user)):
+    return db.query(models.ApprovalDocument).filter(models.ApprovalDocument.approval_id == approval_id).all()
+
+@router.get("/documents/{document_id}/download")
+def download_approval_document(document_id: int, db: Session = Depends(database.get_db), current_user: models.User = Depends(auth.get_current_user)):
+    document = db.query(models.ApprovalDocument).filter(models.ApprovalDocument.id == document_id).first()
+    if not document:
+        raise HTTPException(status_code=404, detail="Document not found")
+        
+    if not os.path.exists(document.file_path):
+        raise HTTPException(status_code=404, detail="File missing from server")
+        
+    return FileResponse(path=document.file_path, filename=document.file_name, media_type=document.mime_type)
+
+@router.delete("/documents/{document_id}")
+def delete_approval_document(document_id: int, db: Session = Depends(database.get_db), current_user: models.User = Depends(auth.get_current_user)):
+    document = db.query(models.ApprovalDocument).filter(models.ApprovalDocument.id == document_id).first()
+    if not document:
+        raise HTTPException(status_code=404, detail="Document not found")
+        
+    # Check permissions (only uploader or admin can delete)
+    if document.uploaded_by != current_user.id and current_user.role != "admin":
+        raise HTTPException(status_code=403, detail="Not authorized to delete this document")
+        
+    # Remove file from disk
+    if os.path.exists(document.file_path):
+        os.remove(document.file_path)
+        
+    db.delete(document)
+    db.commit()
+    services.log_audit(db, current_user.id, "APPROVAL_DOCUMENT_DELETED", "ApprovalDocument", document_id)
+    return {"message": "Document successfully deleted"}

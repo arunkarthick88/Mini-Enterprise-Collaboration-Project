@@ -14,6 +14,7 @@ class UserCreate(UserBase):
 class UserResponse(UserBase):
     id: int
     organization_id: Optional[int] = None 
+    tenant_id: Optional[int] = None # Added in 10A
     class Config:
         from_attributes = True
 
@@ -38,6 +39,10 @@ class TaskBase(BaseModel):
     description: Optional[str] = None
     priority: str = "medium"
     assigned_to_id: Optional[int] = None
+    
+    # PHASE 10B ADDITIONS (To allow creating tasks inside workspaces/channels)
+    workspace_id: Optional[int] = None
+    channel_id: Optional[int] = None
 
 class TaskCreate(TaskBase):
     pass
@@ -59,7 +64,10 @@ class TaskResponse(TaskBase):
     # PHASE 9 SLA ADDITIONS
     sla_status: Optional[str] = None
     sla_due_time: Optional[datetime] = None
-    is_sla_breached: Optional[bool] = False # <-- FIX: Changed to Optional[bool]
+    is_sla_breached: Optional[bool] = False
+    
+    # PHASE 10B TENANT SCOPING
+    tenant_id: Optional[int] = None
     
     class Config:
         from_attributes = True
@@ -96,8 +104,13 @@ class ApprovalResponse(BaseModel):
     # PHASE 9 SLA & ESCALATION ADDITIONS
     sla_status: Optional[str] = None
     sla_due_time: Optional[datetime] = None
-    is_escalated: Optional[bool] = False # <-- FIX: Changed to Optional[bool]
+    is_escalated: Optional[bool] = False
     current_escalation_to: Optional[int] = None
+    
+    # PHASE 10B TENANT SCOPING
+    tenant_id: Optional[int] = None
+    workspace_id: Optional[int] = None
+    channel_id: Optional[int] = None
     
     class Config:
         from_attributes = True
@@ -348,5 +361,76 @@ class ChannelMemberResponse(BaseModel):
     user_id: int
     joined_at: datetime
     is_muted: bool
+    class Config:
+        from_attributes = True
+
+# ==========================================
+# --- PHASE 10B: MESSAGES & DOCUMENTS ---
+# ==========================================
+
+class MessageBase(BaseModel):
+    content: str
+    message_type: str = "text"
+
+class WorkspaceMessageCreate(MessageBase):
+    pass
+
+class WorkspaceMessageResponse(MessageBase):
+    id: int
+    tenant_id: int
+    workspace_id: int
+    sender_id: int
+    content: str
+    message_type: str
+    edited_at: Optional[datetime] = None
+    deleted_at: Optional[datetime] = None
+    created_at: datetime
+    updated_at: datetime
+    class Config:
+        from_attributes = True
+
+class ChannelMessageCreate(MessageBase):
+    pass
+
+class ChannelMessageResponse(MessageBase):
+    id: int
+    tenant_id: int
+    workspace_id: int
+    channel_id: int
+    sender_id: int
+    content: str
+    message_type: str
+    edited_at: Optional[datetime] = None
+    deleted_at: Optional[datetime] = None
+    created_at: datetime
+    updated_at: datetime
+    class Config:
+        from_attributes = True
+
+class TaskDocumentResponse(BaseModel):
+    id: int
+    tenant_id: int
+    task_id: int
+    file_name: str
+    file_path: str
+    file_size: int
+    mime_type: str
+    uploaded_by: int
+    document_type: str
+    created_at: datetime
+    class Config:
+        from_attributes = True
+
+class ApprovalDocumentResponse(BaseModel):
+    id: int
+    tenant_id: int
+    approval_id: int
+    file_name: str
+    file_path: str
+    file_size: int
+    mime_type: str
+    uploaded_by: int
+    document_type: str
+    created_at: datetime
     class Config:
         from_attributes = True

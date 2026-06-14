@@ -1,9 +1,10 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { DragDropContext, Droppable, Draggable } from '@hello-pangea/dnd';
-import { Plus, Trash2, X, MessageSquare, Paperclip, Download, Loader2 } from 'lucide-react';
+import { Plus, Trash2, X, MessageSquare, Paperclip, Download, Loader2, Upload } from 'lucide-react';
 import api from '../api';
-import Navbar from '../components/Navbar'; // <-- IMPORT THE NEW NAVBAR
+import Navbar from '../components/Navbar'; 
+import { toast } from 'react-hot-toast';
 
 const COLUMNS = {
     todo: { name: 'To Do', color: 'border-gray-200 bg-gray-50' },
@@ -15,7 +16,7 @@ const COLUMNS = {
 export default function Kanban() {
     const [tasks, setTasks] = useState({ todo: [], in_progress: [], review: [], done: [] });
     const [user, setUser] = useState(null);
-    const [aiData, setAiData] = useState(null); // <-- Add AI Data state for Navbar
+    const [aiData, setAiData] = useState(null);
     const [usersList, setUsersList] = useState([]);
     const navigate = useNavigate();
 
@@ -31,8 +32,10 @@ export default function Kanban() {
     const [newComment, setNewComment] = useState('');
     const [isInternal, setIsInternal] = useState(false);
     
-    // --- Phase 3: Document State ---
+    // --- Phase 10B: Document State ---
     const [documents, setDocuments] = useState([]);
+    const [fileToUpload, setFileToUpload] = useState(null);
+    const [documentType, setDocumentType] = useState('REFERENCE');
     const [isUploading, setIsUploading] = useState(false);
 
     // Initial Fetch
@@ -59,7 +62,6 @@ export default function Kanban() {
             const userRes = await api.get('/auth/me');
             setUser(userRes.data);
             
-            // Fetch AI Summary (for Navbar Notifications)
             const aiRes = await api.get('/dashboard/ai-summary');
             setAiData(aiRes.data);
 
@@ -88,8 +90,9 @@ export default function Kanban() {
         try {
             await api.post('/tasks/', { title, description, priority, assigned_to_id: assigneeId ? parseInt(assigneeId) : null });
             setTitle(''); setDescription(''); setPriority('medium'); setAssigneeId('');
+            toast.success("Task created successfully");
             fetchUserAndTasks();
-        } catch (err) { alert('Failed to create task.'); }
+        } catch (err) { toast.error('Failed to create task.'); }
     };
 
     const handleDeleteTask = async (id, e) => {
@@ -97,8 +100,9 @@ export default function Kanban() {
         if (!window.confirm("Delete this task?")) return;
         try {
             await api.delete(`/tasks/${id}`);
+            toast.success("Task deleted");
             fetchUserAndTasks();
-        } catch (err) { alert('Not authorized to delete this task.'); }
+        } catch (err) { toast.error('Not authorized to delete this task.'); }
     };
 
     const onDragEnd = async (result) => {
@@ -120,7 +124,7 @@ export default function Kanban() {
         try {
             await api.patch(`/tasks/${taskId}`, { status: destCol });
         } catch (err) {
-            alert("Failed to move task. Refreshing board.");
+            toast.error("Failed to move task. Refreshing board.");
             fetchUserAndTasks(); 
         }
     };
@@ -141,7 +145,7 @@ export default function Kanban() {
 
     const fetchDocuments = async (taskId) => {
         try {
-            const res = await api.get(`/documents/task/${taskId}`);
+            const res = await api.get(`/tasks/${taskId}/documents`);
             setDocuments(res.data);
         } catch (err) { console.error("Could not fetch documents"); }
     };
@@ -154,34 +158,37 @@ export default function Kanban() {
             setNewComment('');
             setIsInternal(false);
             fetchComments(selectedTask.id);
-        } catch (err) { alert('Failed to add comment.'); }
+        } catch (err) { toast.error('Failed to add comment.'); }
     };
 
+    // --- PHASE 10B: UPLOAD LOGIC ---
     const handleFileUpload = async (e) => {
-        const file = e.target.files[0];
-        if (!file) return;
+        e.preventDefault();
+        if (!fileToUpload || !selectedTask) return;
 
         const formData = new FormData();
-        formData.append('file', file);
-        formData.append('task_id', selectedTask.id);
+        formData.append('file', fileToUpload);
+        formData.append('document_type', documentType);
 
         setIsUploading(true);
         try {
-            await api.post('/documents/upload', formData, {
+            await api.post(`/tasks/${selectedTask.id}/documents`, formData, {
                 headers: { 'Content-Type': 'multipart/form-data' }
             });
+            toast.success("Document uploaded successfully!");
+            setFileToUpload(null);
+            document.getElementById('task-file-upload').value = "";
             fetchDocuments(selectedTask.id); 
         } catch (err) {
-            alert('Failed to upload document.');
+            toast.error('Failed to upload document.');
         } finally {
             setIsUploading(false);
-            e.target.value = null; 
         }
     };
 
     const handleDownload = async (docId, fileName) => {
         try {
-            const res = await api.get(`/documents/${docId}/download`, { responseType: 'blob' });
+            const res = await api.get(`/tasks/documents/${docId}/download`, { responseType: 'blob' });
             const url = window.URL.createObjectURL(new Blob([res.data]));
             const link = document.createElement('a');
             link.href = url;
@@ -190,7 +197,18 @@ export default function Kanban() {
             link.click();
             link.remove();
         } catch (err) {
-            alert('Failed to download file.');
+            toast.error('Failed to download file.');
+        }
+    };
+
+    const handleDeleteDoc = async (docId) => {
+        if (!window.confirm("Delete this document?")) return;
+        try {
+            await api.delete(`/tasks/documents/${docId}`);
+            toast.success("Document deleted");
+            fetchDocuments(selectedTask.id);
+        } catch (err) {
+            toast.error("Failed to delete document");
         }
     };
 
@@ -199,7 +217,6 @@ export default function Kanban() {
     return (
         <div className="min-h-screen bg-gray-50 font-sans">
             
-            {/* <-- UNIFIED NAVBAR --> */}
             <div className="mb-8">
                 <Navbar user={user} aiData={aiData} />
             </div>
@@ -310,7 +327,7 @@ export default function Kanban() {
                 {/* TASK DETAILS MODAL (Comments & Attachments) */}
                 {selectedTask && (
                     <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4" onClick={() => setSelectedTask(null)}>
-                        <div className="bg-white w-full max-w-4xl rounded-2xl shadow-2xl flex overflow-hidden max-h-[85vh]" onClick={e => e.stopPropagation()}>
+                        <div className="bg-white w-full max-w-5xl rounded-2xl shadow-2xl flex overflow-hidden max-h-[85vh]" onClick={e => e.stopPropagation()}>
                             
                             {/* LEFT SIDE: Details & Attachments */}
                             <div className="w-1/2 p-6 border-r border-gray-100 bg-gray-50 flex flex-col overflow-y-auto">
@@ -321,33 +338,68 @@ export default function Kanban() {
                                 </div>
 
                                 {/* ATTACHMENTS SECTION */}
-                                <div className="mt-auto">
-                                    <div className="flex justify-between items-center mb-4">
-                                        <h3 className="text-sm font-bold text-gray-800 flex items-center gap-2">
-                                            <Paperclip size={16}/> Attachments ({documents.length})
-                                        </h3>
-                                        <div>
-                                            <input type="file" id="file-upload" className="hidden" onChange={handleFileUpload} />
-                                            <label htmlFor="file-upload" className="cursor-pointer text-xs font-bold bg-blue-100 text-blue-700 hover:bg-blue-200 px-3 py-1.5 rounded-lg flex items-center gap-2 transition">
-                                                {isUploading ? <Loader2 size={14} className="animate-spin" /> : <Plus size={14} />} 
-                                                Upload File
-                                            </label>
+                                <div className="mt-auto pt-6 border-t border-gray-200">
+                                    <h3 className="text-sm font-bold text-gray-800 flex items-center gap-2 mb-4">
+                                        <Paperclip size={16}/> Documents & Deliverables
+                                    </h3>
+                                    
+                                    <form onSubmit={handleFileUpload} className="flex flex-col gap-2 mb-4 p-3 bg-white border border-gray-200 rounded-xl shadow-sm">
+                                        <input 
+                                            id="task-file-upload"
+                                            type="file" 
+                                            required
+                                            onChange={(e) => setFileToUpload(e.target.files[0])}
+                                            className="text-xs text-gray-500 file:mr-3 file:py-1.5 file:px-3 file:rounded-md file:border-0 file:text-xs file:font-bold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100 cursor-pointer"
+                                        />
+                                        <div className="flex gap-2">
+                                            <select 
+                                                value={documentType} 
+                                                onChange={(e) => setDocumentType(e.target.value)}
+                                                className="flex-1 text-xs border border-gray-200 rounded bg-gray-50 p-1.5 outline-none focus:ring-1 focus:ring-blue-500"
+                                            >
+                                                <option value="REFERENCE">Reference</option>
+                                                <option value="DELIVERABLE">Final Deliverable</option>
+                                                <option value="SPECIFICATION">Spec Document</option>
+                                            </select>
+                                            <button 
+                                                type="submit" 
+                                                disabled={!fileToUpload || isUploading}
+                                                className="bg-blue-600 hover:bg-blue-700 disabled:bg-blue-400 text-white font-bold py-1.5 px-3 rounded text-xs flex items-center gap-1 transition"
+                                            >
+                                                {isUploading ? <Loader2 size={12} className="animate-spin" /> : <Upload size={12}/>} Upload
+                                            </button>
                                         </div>
-                                    </div>
+                                    </form>
                                     
                                     <div className="space-y-2">
                                         {documents.length === 0 ? (
-                                            <p className="text-xs text-gray-400 italic">No files attached yet.</p>
+                                            <p className="text-xs text-gray-400 italic text-center py-4">No files attached yet.</p>
                                         ) : (
                                             documents.map(doc => (
-                                                <div key={doc.id} className="bg-white p-3 rounded-lg border border-gray-200 flex justify-between items-center shadow-sm">
-                                                    <div>
-                                                        <p className="text-sm font-medium text-gray-800 truncate max-w-[200px]">{doc.file_name}</p>
-                                                        <p className="text-[10px] text-gray-400">v{doc.version} • Uploaded by User #{doc.uploaded_by}</p>
+                                                <div key={doc.id} className="bg-white p-2.5 rounded-lg border border-gray-200 flex justify-between items-center shadow-sm">
+                                                    <div className="flex items-center gap-2 overflow-hidden">
+                                                        <div className="w-8 h-8 rounded bg-blue-50 text-blue-600 flex items-center justify-center flex-shrink-0">
+                                                            <FileText size={14} />
+                                                        </div>
+                                                        <div className="overflow-hidden">
+                                                            <p className="text-xs font-bold text-gray-800 truncate" title={doc.file_name}>{doc.file_name}</p>
+                                                            <div className="flex gap-1.5 text-[10px] text-gray-400 mt-0.5 font-medium">
+                                                                <span className="text-blue-600">{doc.document_type}</span>
+                                                                <span>•</span>
+                                                                <span>{(doc.file_size / 1024).toFixed(1)} KB</span>
+                                                            </div>
+                                                        </div>
                                                     </div>
-                                                    <button onClick={() => handleDownload(doc.id, doc.file_name)} className="p-2 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded transition">
-                                                        <Download size={16}/>
-                                                    </button>
+                                                    <div className="flex gap-1 flex-shrink-0 ml-2">
+                                                        <button onClick={() => handleDownload(doc.id, doc.file_name)} title="Download" className="p-1.5 text-gray-500 hover:text-blue-600 hover:bg-blue-50 rounded transition">
+                                                            <Download size={14}/>
+                                                        </button>
+                                                        {(user.role === 'admin' || doc.uploaded_by === user.id) && (
+                                                            <button onClick={() => handleDeleteDoc(doc.id)} title="Delete" className="p-1.5 text-gray-500 hover:text-red-600 hover:bg-red-50 rounded transition">
+                                                                <Trash2 size={14}/>
+                                                            </button>
+                                                        )}
+                                                    </div>
                                                 </div>
                                             ))
                                         )}

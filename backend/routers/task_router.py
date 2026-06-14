@@ -1,6 +1,9 @@
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Form
+from fastapi.responses import FileResponse
 from sqlalchemy.orm import Session
 from typing import List
+import os
+import shutil
 import models, schemas, auth, database, services
 
 # --- PHASE 5: WebSocket Manager ---
@@ -8,7 +11,15 @@ from websocket_manager import manager
 
 router = APIRouter(prefix="/tasks", tags=["Tasks"])
 
-# --- TASK CRUD ---
+# --- Setup File Upload Directory ---
+UPLOAD_DIR = "uploads/task_documents"
+os.makedirs(UPLOAD_DIR, exist_ok=True)
+
+
+# ==========================================
+# 1. TASK CRUD (Phases 1-9)
+# ==========================================
+
 @router.post("/", response_model=schemas.TaskResponse)
 async def create_task(
     task: schemas.TaskCreate, 
@@ -18,7 +29,8 @@ async def create_task(
     # Ensure task is tied to the user's organization
     new_task = models.Task(
         **task.dict(), 
-        created_by_id=current_user.id
+        created_by_id=current_user.id,
+        tenant_id=current_user.tenant_id # <-- PHASE 10A addition
     )
     db.add(new_task)
     db.commit()
@@ -143,7 +155,11 @@ async def delete_task(
 
     return {"message": "Task deleted successfully"}
 
-# --- COMMENTS API ---
+
+# ==========================================
+# 2. COMMENTS API
+# ==========================================
+
 @router.post("/{task_id}/comments", response_model=schemas.CommentResponse)
 async def add_comment(task_id: int, comment: schemas.CommentCreate, db: Session = Depends(database.get_db), current_user: models.User = Depends(auth.get_current_user)):
     task = db.query(models.Task).join(models.User, models.Task.created_by_id == models.User.id)\
@@ -183,3 +199,75 @@ def get_comments(task_id: int, db: Session = Depends(database.get_db), current_u
         query = query.filter(models.Comment.is_internal == False)
         
     return query.all()
+
+
+# ==========================================
+# 3. PHASE 10B: TASK DOCUMENTS API
+# ==========================================
+
+@router.post("/{task_id}/documents", response_model=schemas.TaskDocumentResponse)
+async def upload_task_document(
+    task_id: int, 
+    file: UploadFile = File(...), 
+    document_type: str = Form("REFERENCE"), 
+    db: Session = Depends(database.get_db), 
+    current_user: models.User = Depends(auth.get_current_user)
+):
+    task = db.query(models.Task).filter(models.Task.id == task_id).first()
+    if not task:
+        raise HTTPException(status_code=404, detail="Task not found")
+
+    # Save file locally
+    file_location = f"{UPLOAD_DIR}/{task_id}_{datetime.datetime.utcnow().timestamp()}_{file.filename}"
+    with open(file_location, "wb+") as file_object:
+        shutil.copyfileobj(file.file, file_object)
+
+    file_size = os.path.getsize(file_location)
+
+    new_doc = models.TaskDocument(
+        tenant_id=current_user.tenant_id,
+        task_id=task_id,
+        file_name=file.filename,
+        file_path=file_location,
+        file_size=file_size,
+        mime_type=file.content_type,
+        uploaded_by=current_user.id,
+        document_type=document_type
+    )
+    db.add(new_doc)
+    db.commit()
+    db.refresh(new_doc)
+    
+    services.log_audit(db, current_user.id, "TASK_DOCUMENT_UPLOADED", "TaskDocument", new_doc.id)
+    return new_doc
+
+@router.get("/{task_id}/documents", response_model=List[schemas.TaskDocumentResponse])
+def get_task_documents(task_id: int, db: Session = Depends(database.get_db), current_user: models.User = Depends(auth.get_current_user)):
+    # In a full enterprise app, verify user has access to this specific task first
+    return db.query(models.TaskDocument).filter(models.TaskDocument.task_id == task_id).all()
+
+@router.get("/documents/{document_id}/download")
+def download_task_document(document_id: int, db: Session = Depends(database.get_db), current_user: models.User = Depends(auth.get_current_user)):
+    document = db.query(models.TaskDocument).filter(models.TaskDocument.id == document_id).first()
+    if not document:
+        raise HTTPException(status_code=404, detail="Document not found")
+        
+    if not os.path.exists(document.file_path):
+        raise HTTPException(status_code=404, detail="File missing from server")
+        
+    return FileResponse(path=document.file_path, filename=document.file_name, media_type=document.mime_type)
+
+@router.delete("/documents/{document_id}")
+def delete_task_document(document_id: int, db: Session = Depends(database.get_db), current_user: models.User = Depends(auth.role_required(["admin", "manager"]))):
+    document = db.query(models.TaskDocument).filter(models.TaskDocument.id == document_id).first()
+    if not document:
+        raise HTTPException(status_code=404, detail="Document not found")
+        
+    # Remove file from disk
+    if os.path.exists(document.file_path):
+        os.remove(document.file_path)
+        
+    db.delete(document)
+    db.commit()
+    services.log_audit(db, current_user.id, "TASK_DOCUMENT_DELETED", "TaskDocument", document_id)
+    return {"message": "Document successfully deleted"}

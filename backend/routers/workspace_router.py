@@ -11,7 +11,7 @@ from database import get_db
 
 router = APIRouter(
     prefix="/workspaces",
-    tags=["Workspaces (Phase 10A)"],
+    tags=["Workspaces (Phase 10A & 10B)"],
     responses={404: {"description": "Not found"}},
 )
 
@@ -157,3 +157,74 @@ def list_workspace_channels(id: int, db: Session = Depends(get_db), current_user
     if not workspace:
         raise HTTPException(status_code=404, detail="Workspace not found")
     return db.query(models.Channel).filter(models.Channel.workspace_id == id).all()
+
+
+# ==========================================
+# 4. PHASE 10B: Workspace Messages
+# ==========================================
+
+@router.post("/{id}/messages", response_model=schemas.WorkspaceMessageResponse)
+def send_workspace_message(id: int, message: schemas.WorkspaceMessageCreate, db: Session = Depends(get_db), current_user: models.User = Depends(auth.get_current_user)):
+    # Verify membership
+    member = db.query(models.WorkspaceMember).filter(models.WorkspaceMember.workspace_id == id, models.WorkspaceMember.user_id == current_user.id).first()
+    if not member:
+        raise HTTPException(status_code=403, detail="You must be a member of this workspace to send messages.")
+
+    new_msg = models.WorkspaceMessage(
+        tenant_id=current_user.tenant_id,
+        workspace_id=id,
+        sender_id=current_user.id,
+        content=message.content,
+        message_type=message.message_type
+    )
+    db.add(new_msg)
+    db.commit()
+    db.refresh(new_msg)
+    return new_msg
+
+@router.get("/{id}/messages", response_model=List[schemas.WorkspaceMessageResponse])
+def list_workspace_messages(id: int, db: Session = Depends(get_db), current_user: models.User = Depends(auth.get_current_user)):
+    # Verify membership
+    member = db.query(models.WorkspaceMember).filter(models.WorkspaceMember.workspace_id == id, models.WorkspaceMember.user_id == current_user.id).first()
+    if not member:
+        raise HTTPException(status_code=403, detail="You must be a member of this workspace to view messages.")
+        
+    return db.query(models.WorkspaceMessage).filter(models.WorkspaceMessage.workspace_id == id).order_by(models.WorkspaceMessage.created_at.asc()).all()
+
+
+# ==========================================
+# 5. PHASE 10B: Workspace Tasks
+# ==========================================
+
+@router.post("/{id}/tasks", response_model=schemas.TaskResponse)
+def create_workspace_task(id: int, task: schemas.TaskCreate, db: Session = Depends(get_db), current_user: models.User = Depends(auth.get_current_user)):
+    # Verify the creator is a workspace member
+    member = db.query(models.WorkspaceMember).filter(models.WorkspaceMember.workspace_id == id, models.WorkspaceMember.user_id == current_user.id).first()
+    if not member:
+        raise HTTPException(status_code=403, detail="You must be a member of this workspace to create tasks.")
+
+    # Ensure assignee is ALSO in the workspace if provided
+    if task.assigned_to_id:
+        assignee = db.query(models.WorkspaceMember).filter(models.WorkspaceMember.workspace_id == id, models.WorkspaceMember.user_id == task.assigned_to_id).first()
+        if not assignee:
+            raise HTTPException(status_code=400, detail="Assigned user must be a member of this workspace.")
+
+    new_task = models.Task(
+        **task.dict(),
+        created_by_id=current_user.id,
+        tenant_id=current_user.tenant_id,
+        workspace_id=id 
+    )
+    db.add(new_task)
+    db.commit()
+    db.refresh(new_task)
+    return new_task
+
+@router.get("/{id}/tasks", response_model=List[schemas.TaskResponse])
+def list_workspace_tasks(id: int, db: Session = Depends(get_db), current_user: models.User = Depends(auth.get_current_user)):
+    # Verify membership
+    member = db.query(models.WorkspaceMember).filter(models.WorkspaceMember.workspace_id == id, models.WorkspaceMember.user_id == current_user.id).first()
+    if not member:
+        raise HTTPException(status_code=403, detail="You must be a member of this workspace to view tasks.")
+
+    return db.query(models.Task).filter(models.Task.workspace_id == id).order_by(models.Task.created_at.desc()).all()

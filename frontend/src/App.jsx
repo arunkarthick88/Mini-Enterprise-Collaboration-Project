@@ -21,10 +21,11 @@ import ApprovalEscalations from './pages/ApprovalEscalations';
 import ApprovalDelegations from './pages/ApprovalDelegations';
 import NotificationPreferences from './pages/NotificationPreferences';
 
-// --- PHASE 10A: SAAS & WORKSPACES ---
+// --- PHASE 10A & 10B: SAAS, WORKSPACES & CHANNELS ---
 import Tenants from './pages/Tenants';
 import Workspaces from './pages/Workspaces';
-import WorkspaceView from './pages/WorkspaceView'; // <-- NEW IMPORT
+import WorkspaceView from './pages/WorkspaceView';
+import ChannelView from './pages/ChannelView'; // <-- NEW PHASE 10B IMPORT
 // -------------------------------------
 
 // --- PHASE 5: Global WebSocket Listener ---
@@ -110,10 +111,11 @@ export default function App() {
                 <Route path="/approval-delegations" element={<PrivateRoute><ApprovalDelegations /></PrivateRoute>} />
                 <Route path="/notification-preferences" element={<PrivateRoute><NotificationPreferences /></PrivateRoute>} />
 
-                {/* --- PHASE 10A: SAAS & TENANT ROUTES --- */}
+                {/* --- PHASE 10A & 10B: SAAS & TENANT ROUTES --- */}
                 <Route path="/tenants" element={<PrivateRoute><Tenants /></PrivateRoute>} />
                 <Route path="/workspaces" element={<PrivateRoute><Workspaces /></PrivateRoute>} />
-                <Route path="/workspaces/:id" element={<PrivateRoute><WorkspaceView /></PrivateRoute>} /> {/* <-- NEW ROUTE */}
+                <Route path="/workspaces/:id" element={<PrivateRoute><WorkspaceView /></PrivateRoute>} /> 
+                <Route path="/channels/:id" element={<PrivateRoute><ChannelView /></PrivateRoute>} /> {/* <-- NEW PHASE 10B ROUTE */}
             </Routes>
         </BrowserRouter>
     );

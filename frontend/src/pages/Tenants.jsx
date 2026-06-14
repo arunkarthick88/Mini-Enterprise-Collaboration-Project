@@ -16,9 +16,9 @@ export default function Tenants() {
     const [isOnboardOpen, setIsOnboardOpen] = useState(false);
     const [selectedTenantId, setSelectedTenantId] = useState(null);
 
-    // Forms
+    // Forms (FIXED: Added role: 'admin' to satisfy backend validation)
     const [createForm, setCreateForm] = useState({ name: '', contact_email: '', industry: '' });
-    const [onboardForm, setOnboardForm] = useState({ name: '', email: '', password: '' });
+    const [onboardForm, setOnboardForm] = useState({ name: '', email: '', password: '', role: 'admin' });
 
     useEffect(() => {
         fetchData();
@@ -53,7 +53,9 @@ export default function Tenants() {
             setCreateForm({ name: '', contact_email: '', industry: '' });
             fetchData();
         } catch (err) {
-            toast.error(err.response?.data?.detail || "Failed to create tenant");
+            // FIXED: Prevent React crash if backend returns a 422 Array
+            const detail = err.response?.data?.detail;
+            toast.error(Array.isArray(detail) ? "Validation Error: Check your inputs" : (detail || "Failed to create tenant"));
         }
     };
 
@@ -63,10 +65,13 @@ export default function Tenants() {
             await api.post(`/tenants/${selectedTenantId}/onboard`, onboardForm);
             toast.success("Tenant Admin onboarded successfully!");
             setIsOnboardOpen(false);
-            setOnboardForm({ name: '', email: '', password: '' });
+            // Reset the form but keep the role as 'admin'
+            setOnboardForm({ name: '', email: '', password: '', role: 'admin' });
             fetchData();
         } catch (err) {
-            toast.error(err.response?.data?.detail || "Failed to onboard admin");
+            // FIXED: Prevent React crash if backend returns a 422 Array
+            const detail = err.response?.data?.detail;
+            toast.error(Array.isArray(detail) ? "Validation Error: Missing required fields" : (detail || "Failed to onboard admin"));
         }
     };
 

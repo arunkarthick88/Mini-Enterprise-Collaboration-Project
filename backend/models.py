@@ -43,6 +43,12 @@ class Task(Base):
     sla_status = Column(String(50), nullable=True)
     sla_due_time = Column(DateTime, nullable=True)
     is_sla_breached = Column(Boolean, default=False)
+    
+    # --- PHASE 10B: Workspace & Channel Scoping ---
+    tenant_id = Column(Integer, ForeignKey("tenants.id"), nullable=True, index=True)
+    workspace_id = Column(Integer, ForeignKey("workspaces.id"), nullable=True, index=True)
+    channel_id = Column(Integer, ForeignKey("channels.id"), nullable=True, index=True)
+    # ----------------------------------------------
 
     creator = relationship("User", foreign_keys=[created_by_id], back_populates="tasks_created")
     assignee = relationship("User", foreign_keys=[assigned_to_id], back_populates="tasks_assigned")
@@ -75,6 +81,12 @@ class Approval(Base):
     sla_due_time = Column(DateTime, nullable=True)
     is_escalated = Column(Boolean, default=False)
     current_escalation_to = Column(Integer, ForeignKey("users.id"), nullable=True)
+    
+    # --- PHASE 10B: Workspace & Channel Scoping ---
+    tenant_id = Column(Integer, ForeignKey("tenants.id"), nullable=True, index=True)
+    workspace_id = Column(Integer, ForeignKey("workspaces.id"), nullable=True, index=True)
+    channel_id = Column(Integer, ForeignKey("channels.id"), nullable=True, index=True)
+    # ----------------------------------------------
 
     requester = relationship("User", foreign_keys=[requested_by_id])
     history = relationship("ApprovalHistory", back_populates="approval", cascade="all, delete-orphan")
@@ -330,3 +342,60 @@ class ChannelMember(Base):
     joined_at = Column(DateTime, default=datetime.datetime.utcnow)
     is_muted = Column(Boolean, default=False)
     last_read_message_id = Column(Integer, nullable=True) # Pre-configured for Phase 10B Chat
+
+# ==========================================
+# --- PHASE 10B: MESSAGES & DOCUMENTS ---
+# ==========================================
+
+class WorkspaceMessage(Base):
+    __tablename__ = "workspace_messages"
+    id = Column(Integer, primary_key=True, index=True)
+    tenant_id = Column(Integer, ForeignKey("tenants.id"), index=True)
+    workspace_id = Column(Integer, ForeignKey("workspaces.id"), index=True)
+    sender_id = Column(Integer, ForeignKey("users.id"))
+    content = Column(Text)
+    message_type = Column(String(50), default="text")
+    edited_at = Column(DateTime, nullable=True)
+    deleted_at = Column(DateTime, nullable=True)
+    created_at = Column(DateTime, default=datetime.datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.datetime.utcnow, onupdate=datetime.datetime.utcnow)
+
+class ChannelMessage(Base):
+    __tablename__ = "channel_messages"
+    id = Column(Integer, primary_key=True, index=True)
+    tenant_id = Column(Integer, ForeignKey("tenants.id"), index=True)
+    workspace_id = Column(Integer, ForeignKey("workspaces.id"), index=True)
+    channel_id = Column(Integer, ForeignKey("channels.id"), index=True)
+    sender_id = Column(Integer, ForeignKey("users.id"))
+    content = Column(Text)
+    message_type = Column(String(50), default="text")
+    edited_at = Column(DateTime, nullable=True)
+    deleted_at = Column(DateTime, nullable=True)
+    created_at = Column(DateTime, default=datetime.datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.datetime.utcnow, onupdate=datetime.datetime.utcnow)
+
+class TaskDocument(Base):
+    __tablename__ = "task_documents"
+    id = Column(Integer, primary_key=True, index=True)
+    tenant_id = Column(Integer, ForeignKey("tenants.id"), index=True)
+    task_id = Column(Integer, ForeignKey("tasks.id"), index=True)
+    file_name = Column(String)
+    file_path = Column(String)
+    file_size = Column(Integer)
+    mime_type = Column(String)
+    uploaded_by = Column(Integer, ForeignKey("users.id"))
+    document_type = Column(String(50), default="REFERENCE") # REQUIREMENT, SPECIFICATION, REFERENCE, DELIVERABLE
+    created_at = Column(DateTime, default=datetime.datetime.utcnow)
+
+class ApprovalDocument(Base):
+    __tablename__ = "approval_documents"
+    id = Column(Integer, primary_key=True, index=True)
+    tenant_id = Column(Integer, ForeignKey("tenants.id"), index=True)
+    approval_id = Column(Integer, ForeignKey("approvals.id"), index=True)
+    file_name = Column(String)
+    file_path = Column(String)
+    file_size = Column(Integer)
+    mime_type = Column(String)
+    uploaded_by = Column(Integer, ForeignKey("users.id"))
+    document_type = Column(String(50), default="REFERENCE")
+    created_at = Column(DateTime, default=datetime.datetime.utcnow)
