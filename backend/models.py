@@ -1,5 +1,5 @@
 from sqlalchemy import Column, Integer, String, Boolean, ForeignKey, DateTime, Text, JSON
-from sqlalchemy.orm import relationship
+from sqlalchemy.orm import relationship, Mapped, mapped_column
 from database import Base
 import datetime
 
@@ -48,7 +48,10 @@ class Task(Base):
     tenant_id = Column(Integer, ForeignKey("tenants.id"), nullable=True, index=True)
     workspace_id = Column(Integer, ForeignKey("workspaces.id"), nullable=True, index=True)
     channel_id = Column(Integer, ForeignKey("channels.id"), nullable=True, index=True)
-    # ----------------------------------------------
+    
+    # --- PHASE 10C: Project & Team Scoping ---
+    project_id = Column(Integer, ForeignKey("projects.id"), nullable=True, index=True)
+    team_id = Column(Integer, ForeignKey("teams.id"), nullable=True, index=True)
 
     creator = relationship("User", foreign_keys=[created_by_id], back_populates="tasks_created")
     assignee = relationship("User", foreign_keys=[assigned_to_id], back_populates="tasks_assigned")
@@ -326,6 +329,11 @@ class Channel(Base):
     id = Column(Integer, primary_key=True, index=True)
     tenant_id = Column(Integer, ForeignKey("tenants.id"))
     workspace_id = Column(Integer, ForeignKey("workspaces.id"))
+    
+    # --- PHASE 10C: Project Scoping ---
+    project_id = Column(Integer, ForeignKey("projects.id"), nullable=True, index=True)
+    # ----------------------------------
+    
     name = Column(String, index=True)
     description = Column(String, nullable=True)
     type = Column(String, default="PUBLIC") # PUBLIC, PRIVATE, ANNOUNCEMENT, PROJECT
@@ -399,3 +407,107 @@ class ApprovalDocument(Base):
     uploaded_by = Column(Integer, ForeignKey("users.id"))
     document_type = Column(String(50), default="REFERENCE")
     created_at = Column(DateTime, default=datetime.datetime.utcnow)
+
+# ===============================================================
+# --- PHASE 10C: TEAMS, PROJECTS & MEETINGS (SQLAlchemy 2.0) ---
+# ===============================================================
+
+class Team(Base):
+    __tablename__ = "teams"
+    id: Mapped[int] = mapped_column(primary_key=True, index=True)
+    tenant_id: Mapped[int] = mapped_column(ForeignKey("tenants.id"), index=True)
+    workspace_id: Mapped[int] = mapped_column(ForeignKey("workspaces.id"), index=True)
+    name: Mapped[str] = mapped_column(String(100), index=True)
+    description: Mapped[str | None] = mapped_column(Text)
+    created_by: Mapped[int] = mapped_column(ForeignKey("users.id"))
+    is_active: Mapped[bool] = mapped_column(default=True)
+    created_at: Mapped[datetime.datetime] = mapped_column(default=datetime.datetime.utcnow)
+    updated_at: Mapped[datetime.datetime] = mapped_column(default=datetime.datetime.utcnow, onupdate=datetime.datetime.utcnow)
+
+class TeamMember(Base):
+    __tablename__ = "team_members"
+    id: Mapped[int] = mapped_column(primary_key=True, index=True)
+    tenant_id: Mapped[int] = mapped_column(ForeignKey("tenants.id"), index=True)
+    team_id: Mapped[int] = mapped_column(ForeignKey("teams.id"), index=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), index=True)
+    role: Mapped[str] = mapped_column(String(50), default="Member") # Lead, Member, Viewer
+    joined_at: Mapped[datetime.datetime] = mapped_column(default=datetime.datetime.utcnow)
+    is_active: Mapped[bool] = mapped_column(default=True)
+
+class Project(Base):
+    __tablename__ = "projects"
+    id: Mapped[int] = mapped_column(primary_key=True, index=True)
+    tenant_id: Mapped[int] = mapped_column(ForeignKey("tenants.id"), index=True)
+    workspace_id: Mapped[int] = mapped_column(ForeignKey("workspaces.id"), index=True)
+    name: Mapped[str] = mapped_column(String(200), index=True)
+    description: Mapped[str | None] = mapped_column(Text)
+    owner_id: Mapped[int] = mapped_column(ForeignKey("users.id"))
+    status: Mapped[str] = mapped_column(String(50), default="PLANNED", index=True) # PLANNED, ACTIVE, ON_HOLD, COMPLETED, CANCELLED
+    priority: Mapped[str] = mapped_column(String(50), default="MEDIUM") # LOW, MEDIUM, HIGH, CRITICAL
+    start_date: Mapped[datetime.datetime | None] = mapped_column(DateTime)
+    end_date: Mapped[datetime.datetime | None] = mapped_column(DateTime)
+    created_at: Mapped[datetime.datetime] = mapped_column(default=datetime.datetime.utcnow)
+    updated_at: Mapped[datetime.datetime] = mapped_column(default=datetime.datetime.utcnow, onupdate=datetime.datetime.utcnow)
+
+class ProjectTeam(Base):
+    __tablename__ = "project_teams"
+    id: Mapped[int] = mapped_column(primary_key=True, index=True)
+    tenant_id: Mapped[int] = mapped_column(ForeignKey("tenants.id"), index=True)
+    project_id: Mapped[int] = mapped_column(ForeignKey("projects.id"), index=True)
+    team_id: Mapped[int] = mapped_column(ForeignKey("teams.id"), index=True)
+    assigned_at: Mapped[datetime.datetime] = mapped_column(default=datetime.datetime.utcnow)
+
+class ProjectDocument(Base):
+    __tablename__ = "project_documents"
+    id: Mapped[int] = mapped_column(primary_key=True, index=True)
+    tenant_id: Mapped[int] = mapped_column(ForeignKey("tenants.id"), index=True)
+    project_id: Mapped[int] = mapped_column(ForeignKey("projects.id"), index=True)
+    file_name: Mapped[str] = mapped_column(String(255))
+    file_path: Mapped[str] = mapped_column(String(500))
+    file_size: Mapped[int] = mapped_column(Integer)
+    mime_type: Mapped[str] = mapped_column(String(100))
+    uploaded_by: Mapped[int] = mapped_column(ForeignKey("users.id"))
+    document_type: Mapped[str] = mapped_column(String(50), default="OTHER") # REQUIREMENT, DESIGN, TEST, RELEASE, OTHER
+    created_at: Mapped[datetime.datetime] = mapped_column(default=datetime.datetime.utcnow)
+
+class Meeting(Base):
+    __tablename__ = "meetings"
+    id: Mapped[int] = mapped_column(primary_key=True, index=True)
+    tenant_id: Mapped[int] = mapped_column(ForeignKey("tenants.id"), index=True)
+    project_id: Mapped[int] = mapped_column(ForeignKey("projects.id"), index=True)
+    title: Mapped[str] = mapped_column(String(200))
+    description: Mapped[str | None] = mapped_column(Text)
+    start_time: Mapped[datetime.datetime] = mapped_column(DateTime)
+    end_time: Mapped[datetime.datetime] = mapped_column(DateTime)
+    created_by: Mapped[int] = mapped_column(ForeignKey("users.id"))
+    status: Mapped[str] = mapped_column(String(50), default="SCHEDULED") # SCHEDULED, CANCELLED, COMPLETED
+    created_at: Mapped[datetime.datetime] = mapped_column(default=datetime.datetime.utcnow)
+
+class MeetingAttendee(Base):
+    __tablename__ = "meeting_attendees"
+    id: Mapped[int] = mapped_column(primary_key=True, index=True)
+    tenant_id: Mapped[int] = mapped_column(ForeignKey("tenants.id"), index=True)
+    meeting_id: Mapped[int] = mapped_column(ForeignKey("meetings.id"), index=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), index=True)
+    attendance_status: Mapped[str] = mapped_column(String(50), default="INVITED") # INVITED, ACCEPTED, DECLINED, TENTATIVE
+
+class MeetingNote(Base):
+    __tablename__ = "meeting_notes"
+    id: Mapped[int] = mapped_column(primary_key=True, index=True)
+    tenant_id: Mapped[int] = mapped_column(ForeignKey("tenants.id"), index=True)
+    meeting_id: Mapped[int] = mapped_column(ForeignKey("meetings.id"), index=True)
+    notes: Mapped[str] = mapped_column(Text)
+    created_by: Mapped[int] = mapped_column(ForeignKey("users.id"))
+    created_at: Mapped[datetime.datetime] = mapped_column(default=datetime.datetime.utcnow)
+    updated_at: Mapped[datetime.datetime] = mapped_column(default=datetime.datetime.utcnow, onupdate=datetime.datetime.utcnow)
+
+class AIMeetingSummary(Base):
+    __tablename__ = "ai_meeting_summaries"
+    id: Mapped[int] = mapped_column(primary_key=True, index=True)
+    tenant_id: Mapped[int] = mapped_column(ForeignKey("tenants.id"), index=True)
+    meeting_id: Mapped[int] = mapped_column(ForeignKey("meetings.id"), unique=True, index=True)
+    summary: Mapped[str | None] = mapped_column(Text)
+    action_items: Mapped[str | None] = mapped_column(Text)
+    risks: Mapped[str | None] = mapped_column(Text)
+    decisions: Mapped[str | None] = mapped_column(Text)
+    generated_at: Mapped[datetime.datetime] = mapped_column(default=datetime.datetime.utcnow)

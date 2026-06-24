@@ -40,9 +40,11 @@ class TaskBase(BaseModel):
     priority: str = "medium"
     assigned_to_id: Optional[int] = None
     
-    # PHASE 10B ADDITIONS (To allow creating tasks inside workspaces/channels)
+    # PHASE 10B & 10C ADDITIONS (To allow creating tasks inside workspaces/channels/projects)
     workspace_id: Optional[int] = None
     channel_id: Optional[int] = None
+    project_id: Optional[int] = None
+    team_id: Optional[int] = None
 
 class TaskCreate(TaskBase):
     pass
@@ -349,6 +351,7 @@ class ChannelResponse(ChannelBase):
     id: int
     tenant_id: int
     workspace_id: int
+    project_id: Optional[int] = None # Added for 10C
     created_by: int
     is_archived: bool
     created_at: datetime
@@ -432,5 +435,163 @@ class ApprovalDocumentResponse(BaseModel):
     uploaded_by: int
     document_type: str
     created_at: datetime
+    class Config:
+        from_attributes = True
+
+
+# =========================================================
+# --- PHASE 10C: TEAMS, PROJECTS & MEETINGS SCHEMAS ---
+# =========================================================
+
+# 1. Team Schemas
+class TeamBase(BaseModel):
+    name: str
+    description: Optional[str] = None
+    workspace_id: int
+
+class TeamCreate(TeamBase):
+    pass
+
+class TeamResponse(TeamBase):
+    id: int
+    tenant_id: int
+    created_by: int
+    is_active: bool
+    created_at: datetime
+    updated_at: datetime
+    class Config:
+        from_attributes = True
+
+class TeamMemberCreate(BaseModel):
+    user_id: int
+    role: str = "Member"
+
+class TeamMemberResponse(BaseModel):
+    id: int
+    tenant_id: int
+    team_id: int
+    user_id: int
+    role: str
+    joined_at: datetime
+    is_active: bool
+    class Config:
+        from_attributes = True
+
+# 2. Project Schemas
+class ProjectBase(BaseModel):
+    name: str
+    description: Optional[str] = None
+    workspace_id: int
+    status: str = "PLANNED"
+    priority: str = "MEDIUM"
+    start_date: Optional[datetime] = None
+    end_date: Optional[datetime] = None
+
+class ProjectCreate(ProjectBase):
+    pass
+
+class ProjectUpdate(BaseModel):
+    name: Optional[str] = None
+    description: Optional[str] = None
+    status: Optional[str] = None
+    priority: Optional[str] = None
+    start_date: Optional[datetime] = None
+    end_date: Optional[datetime] = None
+    owner_id: Optional[int] = None
+
+class ProjectResponse(ProjectBase):
+    id: int
+    tenant_id: int
+    owner_id: int
+    created_at: datetime
+    updated_at: datetime
+    class Config:
+        from_attributes = True
+
+class ProjectTeamResponse(BaseModel):
+    id: int
+    tenant_id: int
+    project_id: int
+    team_id: int
+    assigned_at: datetime
+    class Config:
+        from_attributes = True
+
+class ProjectDocumentResponse(BaseModel):
+    id: int
+    tenant_id: int
+    project_id: int
+    file_name: str
+    file_path: str
+    file_size: int
+    mime_type: str
+    uploaded_by: int
+    document_type: str
+    created_at: datetime
+    class Config:
+        from_attributes = True
+
+# 3. Meeting Schemas
+class MeetingBase(BaseModel):
+    project_id: int
+    title: str
+    description: Optional[str] = None
+    start_time: datetime
+    end_time: datetime
+
+class MeetingCreate(MeetingBase):
+    pass
+
+class MeetingUpdate(BaseModel):
+    title: Optional[str] = None
+    description: Optional[str] = None
+    start_time: Optional[datetime] = None
+    end_time: Optional[datetime] = None
+    status: Optional[str] = None
+
+class MeetingResponse(MeetingBase):
+    id: int
+    tenant_id: int
+    created_by: int
+    status: str
+    created_at: datetime
+    class Config:
+        from_attributes = True
+
+class MeetingAttendeeCreate(BaseModel):
+    user_id: int
+
+class MeetingAttendeeResponse(BaseModel):
+    id: int
+    tenant_id: int
+    meeting_id: int
+    user_id: int
+    attendance_status: str
+    class Config:
+        from_attributes = True
+
+class MeetingNoteCreate(BaseModel):
+    notes: str
+
+class MeetingNoteResponse(BaseModel):
+    id: int
+    tenant_id: int
+    meeting_id: int
+    notes: str
+    created_by: int
+    created_at: datetime
+    updated_at: datetime
+    class Config:
+        from_attributes = True
+
+class AIMeetingSummaryResponse(BaseModel):
+    id: int
+    tenant_id: int
+    meeting_id: int
+    summary: Optional[str] = None
+    action_items: Optional[str] = None
+    risks: Optional[str] = None
+    decisions: Optional[str] = None
+    generated_at: datetime
     class Config:
         from_attributes = True

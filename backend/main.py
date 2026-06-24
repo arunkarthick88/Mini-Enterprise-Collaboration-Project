@@ -72,7 +72,10 @@ from routers import (
     governance_router,
     tenant_router,      # <-- PHASE 10A: TENANTS
     workspace_router,   # <-- PHASE 10A: WORKSPACES
-    channel_router      # <-- PHASE 10A: CHANNELS
+    channel_router,     # <-- PHASE 10A: CHANNELS
+    team_router,        # <-- PHASE 10C: TEAMS
+    project_router,     # <-- PHASE 10C: PROJECTS
+    meeting_router      # <-- PHASE 10C: MEETINGS
 )
 
 app.include_router(auth_router.router)
@@ -85,9 +88,12 @@ app.include_router(dashboard_router.router)
 app.include_router(billing_router.router) 
 app.include_router(sla_router.router)
 app.include_router(governance_router.router)
-app.include_router(tenant_router.router)    # <-- REGISTER TENANT ROUTER
-app.include_router(workspace_router.router) # <-- REGISTER WORKSPACE ROUTER
-app.include_router(channel_router.router)   # <-- REGISTER CHANNEL ROUTER
+app.include_router(tenant_router.router)
+app.include_router(workspace_router.router)
+app.include_router(channel_router.router)
+app.include_router(team_router.router)     # <-- REGISTER TEAM ROUTER
+app.include_router(project_router.router)  # <-- REGISTER PROJECT ROUTER
+app.include_router(meeting_router.router)  # <-- REGISTER MEETING ROUTER
 
 
 # --- PHASE 5: REAL-TIME WEBSOCKET ENDPOINT ---

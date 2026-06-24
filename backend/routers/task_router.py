@@ -4,6 +4,7 @@ from sqlalchemy.orm import Session
 from typing import List
 import os
 import shutil
+import datetime
 import models, schemas, auth, database, services
 
 # --- PHASE 5: WebSocket Manager ---
@@ -11,9 +12,14 @@ from websocket_manager import manager
 
 router = APIRouter(prefix="/tasks", tags=["Tasks"])
 
-# --- Setup File Upload Directory ---
-UPLOAD_DIR = "uploads/task_documents"
-os.makedirs(UPLOAD_DIR, exist_ok=True)
+# --- Setup File Upload Directory (Bypass Windows Conflict) ---
+BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+UPLOAD_DIR_STR = os.path.join(BASE_DIR, "storage", "task_documents")
+
+try:
+    os.makedirs(UPLOAD_DIR_STR, exist_ok=True)
+except Exception as e:
+    print(f"Warning: Could not create storage directory: {e}")
 
 
 # ==========================================
@@ -218,7 +224,7 @@ async def upload_task_document(
         raise HTTPException(status_code=404, detail="Task not found")
 
     # Save file locally
-    file_location = f"{UPLOAD_DIR}/{task_id}_{datetime.datetime.utcnow().timestamp()}_{file.filename}"
+    file_location = os.path.join(UPLOAD_DIR_STR, f"{task_id}_{datetime.datetime.utcnow().timestamp()}_{file.filename}")
     with open(file_location, "wb+") as file_object:
         shutil.copyfileobj(file.file, file_object)
 
