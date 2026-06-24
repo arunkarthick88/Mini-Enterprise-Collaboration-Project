@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { Hash, Users, Plus, Shield, MessageSquare, Send, CheckSquare, FileText, Info, Briefcase, Calendar, BarChart2, Activity } from 'lucide-react';
+import { Hash, Users, Plus, Shield, MessageSquare, Send, CheckSquare, FileText, Info, Briefcase, Calendar, BarChart2, Activity, CalendarPlus, Sparkles, Clock } from 'lucide-react';
 import api from '../api';
 import Navbar from '../components/Navbar';
 import { PageHeader, EmptyState, StatusBadge } from '../components/UI';
@@ -38,12 +38,19 @@ export default function WorkspaceView() {
     const [isTeamModalOpen, setIsTeamModalOpen] = useState(false);
     const [isProjectModalOpen, setIsProjectModalOpen] = useState(false);
     
+    // --- PHASE 10C MEETING STATES ---
+    const [isMeetingModalOpen, setIsMeetingModalOpen] = useState(false);
+    const [selectedMeeting, setSelectedMeeting] = useState(null);
+    const [meetingSummary, setMeetingSummary] = useState(null);
+    const [isGeneratingSummary, setIsGeneratingSummary] = useState(false);
+    
     // Forms
     const [newMessage, setNewMessage] = useState('');
     const [channelForm, setChannelForm] = useState({ name: '', description: '', type: 'PUBLIC' });
     const [memberForm, setMemberForm] = useState({ user_id: '', role: 'Member' });
     const [teamForm, setTeamForm] = useState({ name: '', description: '', workspace_id: parseInt(id) });
     const [projectForm, setProjectForm] = useState({ name: '', description: '', priority: 'MEDIUM', workspace_id: parseInt(id), end_date: '' });
+    const [meetingForm, setMeetingForm] = useState({ title: '', description: '', start_time: '', end_time: '' });
 
     const messagesEndRef = useRef(null);
 
@@ -183,7 +190,6 @@ export default function WorkspaceView() {
         e.preventDefault();
         try {
             const tenantId = user?.tenant_id || 1;
-            // Convert date string to ISO DateTime if provided
             const payload = { ...projectForm };
             if (payload.end_date) {
                 payload.end_date = new Date(payload.end_date).toISOString();
@@ -198,6 +204,56 @@ export default function WorkspaceView() {
             fetchData();
         } catch (err) {
             toast.error(err.response?.data?.detail || "Failed to create project");
+        }
+    };
+
+    // --- Phase 10C Meeting Handlers ---
+    const handleScheduleMeeting = async (e) => {
+        e.preventDefault();
+        try {
+            const tenantId = user?.tenant_id || 1;
+            const payload = {
+                project_id: activeProjectId,
+                title: meetingForm.title,
+                description: meetingForm.description,
+                start_time: new Date(meetingForm.start_time).toISOString(),
+                end_time: new Date(meetingForm.end_time).toISOString()
+            };
+            await api.post(`/tenants/${tenantId}/meetings/`, payload);
+            toast.success("Meeting scheduled!");
+            setIsMeetingModalOpen(false);
+            setMeetingForm({ title: '', description: '', start_time: '', end_time: '' });
+            fetchProjectCalendar(activeProjectId); // Refresh calendar
+        } catch (err) {
+            toast.error(err.response?.data?.detail || "Failed to schedule meeting");
+        }
+    };
+
+    const handleOpenMeetingDetails = async (event) => {
+        if (event.type !== 'meeting') return; // Ignore tasks
+        setSelectedMeeting(event);
+        setMeetingSummary(null);
+        try {
+            const tenantId = user?.tenant_id || 1;
+            const res = await api.get(`/tenants/${tenantId}/meetings/${event.id}/summary`);
+            setMeetingSummary(res.data);
+        } catch (err) {
+            // 404 just means no summary generated yet, perfectly fine.
+        }
+    };
+
+    const handleGenerateAiSummary = async () => {
+        if (!selectedMeeting) return;
+        setIsGeneratingSummary(true);
+        try {
+            const tenantId = user?.tenant_id || 1;
+            const res = await api.post(`/tenants/${tenantId}/meetings/${selectedMeeting.id}/summary`);
+            setMeetingSummary(res.data);
+            toast.success("AI Summary generated!");
+        } catch (err) {
+            toast.error(err.response?.data?.detail || "Failed to generate summary");
+        } finally {
+            setIsGeneratingSummary(false);
         }
     };
 
@@ -473,6 +529,9 @@ export default function WorkspaceView() {
                                 <div className="p-6">
                                     <div className="flex justify-between items-center mb-6">
                                         <h3 className="text-xl font-bold text-gray-800 flex items-center gap-2"><Calendar size={20} className="text-purple-600"/> Project Calendar & Events</h3>
+                                        <button onClick={() => setIsMeetingModalOpen(true)} className="bg-purple-600 hover:bg-purple-700 text-white px-4 py-2 rounded-xl text-sm font-bold transition flex items-center gap-2">
+                                            <CalendarPlus size={16} /> Schedule Meeting
+                                        </button>
                                     </div>
                                     
                                     <div className="space-y-3">
@@ -483,7 +542,11 @@ export default function WorkspaceView() {
                                             </div>
                                         ) : (
                                             selectedProjectCalendar.calendar_events.map((event, index) => (
-                                                <div key={`${event.id}-${index}`} className="flex items-center p-4 border border-gray-100 rounded-xl hover:bg-gray-50 transition">
+                                                <div 
+                                                    key={`${event.id}-${index}`} 
+                                                    onClick={() => handleOpenMeetingDetails(event)}
+                                                    className={`flex items-center p-4 border border-gray-100 rounded-xl transition ${event.type === 'meeting' ? 'hover:bg-purple-50 cursor-pointer hover:border-purple-200' : 'bg-gray-50/50'}`}
+                                                >
                                                     <div className={`w-12 h-12 rounded-lg flex flex-col items-center justify-center flex-shrink-0 mr-4 ${event.type === 'meeting' ? 'bg-purple-100 text-purple-700' : 'bg-red-100 text-red-700'}`}>
                                                         <span className="text-xs font-black uppercase">{new Date(event.start).toLocaleString('en-us', { month: 'short' })}</span>
                                                         <span className="text-lg font-black leading-none">{new Date(event.start).getDate()}</span>
@@ -578,6 +641,95 @@ export default function WorkspaceView() {
                                 <button type="submit" className="px-4 py-2 bg-purple-600 text-white rounded-xl text-sm font-bold hover:bg-purple-700">Launch Project</button>
                             </div>
                         </form>
+                    </div>
+                </div>
+            )}
+
+            {/* Schedule Meeting Modal */}
+            {isMeetingModalOpen && (
+                <div className="fixed inset-0 bg-gray-900/40 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+                    <div className="bg-white rounded-2xl border border-gray-100 shadow-2xl max-w-md w-full p-6">
+                        <h3 className="text-xl font-bold text-gray-800 mb-4 flex items-center gap-2"><CalendarPlus className="text-purple-500" /> Schedule Meeting</h3>
+                        <form onSubmit={handleScheduleMeeting} className="space-y-4">
+                            <div>
+                                <label className="block text-xs font-bold uppercase text-gray-400 mb-1">Meeting Title</label>
+                                <input required value={meetingForm.title} onChange={e => setMeetingForm({...meetingForm, title: e.target.value})} className="w-full border border-gray-200 rounded-xl p-2.5 text-sm" placeholder="e.g. Sprint Planning" />
+                            </div>
+                            <div>
+                                <label className="block text-xs font-bold uppercase text-gray-400 mb-1">Agenda / Description</label>
+                                <textarea value={meetingForm.description} onChange={e => setMeetingForm({...meetingForm, description: e.target.value})} className="w-full border border-gray-200 rounded-xl p-2.5 text-sm" placeholder="What will be discussed?" rows="2" />
+                            </div>
+                            <div className="grid grid-cols-2 gap-4">
+                                <div>
+                                    <label className="block text-xs font-bold uppercase text-gray-400 mb-1">Start Time</label>
+                                    <input required type="datetime-local" value={meetingForm.start_time} onChange={e => setMeetingForm({...meetingForm, start_time: e.target.value})} className="w-full border border-gray-200 rounded-xl p-2.5 text-sm" />
+                                </div>
+                                <div>
+                                    <label className="block text-xs font-bold uppercase text-gray-400 mb-1">End Time</label>
+                                    <input required type="datetime-local" value={meetingForm.end_time} onChange={e => setMeetingForm({...meetingForm, end_time: e.target.value})} className="w-full border border-gray-200 rounded-xl p-2.5 text-sm" />
+                                </div>
+                            </div>
+                            <div className="flex justify-end gap-3 pt-2">
+                                <button type="button" onClick={() => setIsMeetingModalOpen(false)} className="px-4 py-2 border border-gray-200 text-gray-600 rounded-xl text-sm font-medium">Cancel</button>
+                                <button type="submit" className="px-4 py-2 bg-purple-600 text-white rounded-xl text-sm font-bold hover:bg-purple-700">Schedule</button>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+            )}
+
+            {/* AI Meeting Summary Modal */}
+            {selectedMeeting && (
+                <div className="fixed inset-0 bg-gray-900/60 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+                    <div className="bg-white rounded-2xl border border-gray-100 shadow-2xl max-w-2xl w-full p-8 relative overflow-hidden">
+                        
+                        <button onClick={() => setSelectedMeeting(null)} className="absolute top-4 right-4 text-gray-400 hover:text-gray-800 transition">
+                            <Plus size={24} className="rotate-45" />
+                        </button>
+
+                        <div className="mb-6">
+                            <span className="text-[10px] font-black uppercase text-purple-600 tracking-wider bg-purple-50 px-2 py-1 rounded">Meeting Intelligence</span>
+                            <h2 className="text-2xl font-black text-gray-900 mt-2">{selectedMeeting.title}</h2>
+                            <p className="text-sm text-gray-500 mt-1 flex items-center gap-2"><Clock size={14} /> {new Date(selectedMeeting.start).toLocaleString()}</p>
+                        </div>
+
+                        {!meetingSummary ? (
+                            <div className="bg-gray-50 border border-dashed border-gray-300 rounded-2xl p-12 flex flex-col items-center justify-center text-center">
+                                <div className="w-16 h-16 bg-purple-100 rounded-full flex items-center justify-center mb-4">
+                                    <Sparkles size={28} className="text-purple-600" />
+                                </div>
+                                <h3 className="text-lg font-bold text-gray-800 mb-2">No Summary Generated</h3>
+                                <p className="text-sm text-gray-500 mb-6 max-w-sm">Use our AI engine to automatically extract action items, decisions, and risks from the meeting notes.</p>
+                                <button 
+                                    onClick={handleGenerateAiSummary}
+                                    disabled={isGeneratingSummary}
+                                    className="bg-gradient-to-r from-purple-600 to-blue-600 hover:from-purple-700 hover:to-blue-700 text-white px-6 py-3 rounded-xl font-bold flex items-center gap-2 shadow-lg hover:shadow-xl transition disabled:opacity-50"
+                                >
+                                    {isGeneratingSummary ? 'Analyzing Notes...' : '✨ Generate AI Summary'}
+                                </button>
+                            </div>
+                        ) : (
+                            <div className="space-y-6">
+                                <div className="bg-blue-50 border border-blue-100 p-4 rounded-xl">
+                                    <h4 className="text-xs font-black uppercase text-blue-800 tracking-wider mb-2">Executive Summary</h4>
+                                    <p className="text-sm text-blue-900 leading-relaxed">{meetingSummary.summary}</p>
+                                </div>
+                                <div className="grid grid-cols-2 gap-4">
+                                    <div className="bg-white border border-gray-200 p-4 rounded-xl shadow-sm">
+                                        <h4 className="text-xs font-black uppercase text-gray-500 tracking-wider mb-2">Key Decisions</h4>
+                                        <p className="text-sm text-gray-800 whitespace-pre-line">{meetingSummary.decisions}</p>
+                                    </div>
+                                    <div className="bg-white border border-gray-200 p-4 rounded-xl shadow-sm">
+                                        <h4 className="text-xs font-black uppercase text-gray-500 tracking-wider mb-2">Action Items</h4>
+                                        <p className="text-sm text-gray-800 whitespace-pre-line">{meetingSummary.action_items}</p>
+                                    </div>
+                                </div>
+                                <div className="bg-red-50 border border-red-100 p-4 rounded-xl">
+                                    <h4 className="text-xs font-black uppercase text-red-800 tracking-wider mb-2">Identified Risks</h4>
+                                    <p className="text-sm text-red-900 whitespace-pre-line">{meetingSummary.risks}</p>
+                                </div>
+                            </div>
+                        )}
                     </div>
                 </div>
             )}
