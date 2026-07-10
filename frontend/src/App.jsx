@@ -25,7 +25,16 @@ import NotificationPreferences from './pages/NotificationPreferences';
 import Tenants from './pages/Tenants';
 import Workspaces from './pages/Workspaces';
 import WorkspaceView from './pages/WorkspaceView';
-import ChannelView from './pages/ChannelView'; // <-- NEW PHASE 10B IMPORT
+import ChannelView from './pages/ChannelView'; 
+
+// --- PHASE 10D: PLATFORM SERVICES ---
+import Workflows from './pages/Workflows';
+import NotificationRules from './pages/NotificationRules';
+import GlobalSearch from './pages/GlobalSearch';
+import SavedSearches from './pages/SavedSearches';
+import AnalyticsDashboard from './pages/AnalyticsDashboard';
+import KnowledgeBase from './pages/KnowledgeBase';
+import CustomForms from './pages/CustomForms';
 // -------------------------------------
 
 // --- PHASE 5: Global WebSocket Listener ---
@@ -115,7 +124,16 @@ export default function App() {
                 <Route path="/tenants" element={<PrivateRoute><Tenants /></PrivateRoute>} />
                 <Route path="/workspaces" element={<PrivateRoute><Workspaces /></PrivateRoute>} />
                 <Route path="/workspaces/:id" element={<PrivateRoute><WorkspaceView /></PrivateRoute>} /> 
-                <Route path="/channels/:id" element={<PrivateRoute><ChannelView /></PrivateRoute>} /> {/* <-- NEW PHASE 10B ROUTE */}
+                <Route path="/channels/:id" element={<PrivateRoute><ChannelView /></PrivateRoute>} />
+
+                {/* --- PHASE 10D: PLATFORM SERVICES ROUTES --- */}
+                <Route path="/workflows" element={<PrivateRoute><Workflows /></PrivateRoute>} />
+                <Route path="/notification-rules" element={<PrivateRoute><NotificationRules /></PrivateRoute>} />
+                <Route path="/search" element={<PrivateRoute><GlobalSearch /></PrivateRoute>} />
+                <Route path="/saved-searches" element={<PrivateRoute><SavedSearches /></PrivateRoute>} />
+                <Route path="/analytics" element={<PrivateRoute><AnalyticsDashboard /></PrivateRoute>} />
+                <Route path="/knowledge" element={<PrivateRoute><KnowledgeBase /></PrivateRoute>} />
+                <Route path="/forms" element={<PrivateRoute><CustomForms /></PrivateRoute>} />
             </Routes>
         </BrowserRouter>
     );

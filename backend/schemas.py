@@ -595,3 +595,166 @@ class AIMeetingSummaryResponse(BaseModel):
     generated_at: datetime
     class Config:
         from_attributes = True
+
+
+# =========================================================
+# --- PHASE 10D: PLATFORM SERVICES SCHEMAS ---
+# =========================================================
+
+# 1. Workflow Automation Schemas
+class WorkflowDefinitionBase(BaseModel):
+    name: str
+    workflow_type: str # TASK, APPROVAL, PROJECT, MEETING
+    description: Optional[str] = None
+    is_active: bool = True
+
+class WorkflowDefinitionCreate(WorkflowDefinitionBase):
+    pass
+
+class WorkflowDefinitionUpdate(BaseModel):
+    name: Optional[str] = None
+    description: Optional[str] = None
+    is_active: Optional[bool] = None
+
+class WorkflowDefinitionResponse(WorkflowDefinitionBase):
+    id: int
+    tenant_id: int
+    created_at: datetime
+    class Config:
+        from_attributes = True
+
+class WorkflowRuleBase(BaseModel):
+    trigger_event: str
+    condition_type: Optional[str] = None
+    condition_value: Optional[str] = None
+    action_type: str
+    action_value: str
+
+class WorkflowRuleCreate(WorkflowRuleBase):
+    pass
+
+class WorkflowRuleResponse(WorkflowRuleBase):
+    id: int
+    workflow_id: int
+    class Config:
+        from_attributes = True
+
+class WorkflowExecutionResponse(BaseModel):
+    id: int
+    workflow_id: int
+    entity_type: str
+    entity_id: int
+    execution_status: str
+    executed_at: datetime
+    class Config:
+        from_attributes = True
+
+# 2. Notification Engine Schemas
+class NotificationRuleBase(BaseModel):
+    event_type: str
+    notification_type: str = "IN_APP"
+    is_active: bool = True
+
+class NotificationRuleCreate(NotificationRuleBase):
+    pass
+
+class NotificationRuleUpdate(BaseModel):
+    notification_type: Optional[str] = None
+    is_active: Optional[bool] = None
+
+class NotificationRuleResponse(NotificationRuleBase):
+    id: int
+    tenant_id: int
+    class Config:
+        from_attributes = True
+
+# 3. Global Search Schemas
+class SavedSearchBase(BaseModel):
+    name: str
+    query_json: Dict[str, Any]
+
+class SavedSearchCreate(SavedSearchBase):
+    pass
+
+class SavedSearchResponse(SavedSearchBase):
+    id: int
+    tenant_id: int
+    user_id: int
+    created_at: datetime
+    class Config:
+        from_attributes = True
+
+# 4. Knowledge Base Schemas
+class KnowledgeCategoryBase(BaseModel):
+    name: str
+    description: Optional[str] = None
+
+class KnowledgeCategoryCreate(KnowledgeCategoryBase):
+    pass
+
+class KnowledgeCategoryResponse(KnowledgeCategoryBase):
+    id: int
+    tenant_id: int
+    class Config:
+        from_attributes = True
+
+class KnowledgeArticleBase(BaseModel):
+    category_id: int
+    title: str
+    content: str
+    tags: Optional[str] = None
+
+class KnowledgeArticleCreate(KnowledgeArticleBase):
+    pass
+
+class KnowledgeArticleUpdate(BaseModel):
+    title: Optional[str] = None
+    content: Optional[str] = None
+    tags: Optional[str] = None
+    category_id: Optional[int] = None
+
+class KnowledgeArticleResponse(KnowledgeArticleBase):
+    id: int
+    tenant_id: int
+    version: int
+    created_by: int
+    created_at: datetime
+    updated_at: datetime
+    class Config:
+        from_attributes = True
+
+# 5. Custom Forms Schemas
+class CustomFormBase(BaseModel):
+    name: str
+    description: Optional[str] = None
+    request_type: str
+    is_active: bool = True
+
+class CustomFormCreate(CustomFormBase):
+    pass
+
+class CustomFormUpdate(BaseModel):
+    name: Optional[str] = None
+    description: Optional[str] = None
+    is_active: Optional[bool] = None
+
+class CustomFormResponse(CustomFormBase):
+    id: int
+    tenant_id: int
+    class Config:
+        from_attributes = True
+
+class CustomFormFieldBase(BaseModel):
+    field_name: str
+    field_type: str # TEXT, NUMBER, DATE, SELECT, FILE
+    validation_rules: Optional[Dict[str, Any]] = None
+    is_required: bool = False
+
+class CustomFormFieldCreate(CustomFormFieldBase):
+    pass
+
+class CustomFormFieldResponse(CustomFormFieldBase):
+    id: int
+    form_id: int
+    class Config:
+        from_attributes = True

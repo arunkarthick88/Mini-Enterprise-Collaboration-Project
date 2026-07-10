@@ -511,3 +511,91 @@ class AIMeetingSummary(Base):
     risks: Mapped[str | None] = mapped_column(Text)
     decisions: Mapped[str | None] = mapped_column(Text)
     generated_at: Mapped[datetime.datetime] = mapped_column(default=datetime.datetime.utcnow)
+
+# ===============================================================
+# --- PHASE 10D: PLATFORM SERVICES (Workflows, KB, Forms) ---
+# ===============================================================
+
+class WorkflowDefinition(Base):
+    __tablename__ = "workflow_definitions"
+    id: Mapped[int] = mapped_column(primary_key=True, index=True)
+    tenant_id: Mapped[int] = mapped_column(ForeignKey("tenants.id"), index=True)
+    name: Mapped[str] = mapped_column(String(200))
+    workflow_type: Mapped[str] = mapped_column(String(50)) # TASK, APPROVAL, PROJECT, MEETING
+    description: Mapped[str | None] = mapped_column(Text)
+    is_active: Mapped[bool] = mapped_column(default=True)
+    created_at: Mapped[datetime.datetime] = mapped_column(default=datetime.datetime.utcnow)
+
+class WorkflowRule(Base):
+    __tablename__ = "workflow_rules"
+    id: Mapped[int] = mapped_column(primary_key=True, index=True)
+    workflow_id: Mapped[int] = mapped_column(ForeignKey("workflow_definitions.id"), index=True)
+    trigger_event: Mapped[str] = mapped_column(String(100))
+    condition_type: Mapped[str | None] = mapped_column(String(100))
+    condition_value: Mapped[str | None] = mapped_column(String(255))
+    action_type: Mapped[str] = mapped_column(String(100)) # Notification, Escalation, Status Update
+    action_value: Mapped[str] = mapped_column(Text)
+
+class WorkflowExecution(Base):
+    __tablename__ = "workflow_executions"
+    id: Mapped[int] = mapped_column(primary_key=True, index=True)
+    workflow_id: Mapped[int] = mapped_column(ForeignKey("workflow_definitions.id"), index=True)
+    entity_type: Mapped[str] = mapped_column(String(50)) # Task, Approval, Project, Meeting
+    entity_id: Mapped[int] = mapped_column(Integer, index=True)
+    execution_status: Mapped[str] = mapped_column(String(50), default="SUCCESS") # SUCCESS, FAILED
+    executed_at: Mapped[datetime.datetime] = mapped_column(default=datetime.datetime.utcnow)
+
+class NotificationRule(Base):
+    __tablename__ = "notification_rules"
+    id: Mapped[int] = mapped_column(primary_key=True, index=True)
+    tenant_id: Mapped[int] = mapped_column(ForeignKey("tenants.id"), index=True)
+    event_type: Mapped[str] = mapped_column(String(100)) # Task Assigned, Approval Pending, Meeting Reminder
+    notification_type: Mapped[str] = mapped_column(String(50), default="IN_APP") # IN_APP, EMAIL
+    is_active: Mapped[bool] = mapped_column(default=True)
+
+class SavedSearch(Base):
+    __tablename__ = "saved_searches"
+    id: Mapped[int] = mapped_column(primary_key=True, index=True)
+    tenant_id: Mapped[int] = mapped_column(ForeignKey("tenants.id"), index=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), index=True)
+    name: Mapped[str] = mapped_column(String(200))
+    query_json: Mapped[dict] = mapped_column(JSON) # Stored search filters
+    created_at: Mapped[datetime.datetime] = mapped_column(default=datetime.datetime.utcnow)
+
+class KnowledgeCategory(Base):
+    __tablename__ = "knowledge_categories"
+    id: Mapped[int] = mapped_column(primary_key=True, index=True)
+    tenant_id: Mapped[int] = mapped_column(ForeignKey("tenants.id"), index=True)
+    name: Mapped[str] = mapped_column(String(200))
+    description: Mapped[str | None] = mapped_column(Text)
+
+class KnowledgeArticle(Base):
+    __tablename__ = "knowledge_articles"
+    id: Mapped[int] = mapped_column(primary_key=True, index=True)
+    tenant_id: Mapped[int] = mapped_column(ForeignKey("tenants.id"), index=True)
+    category_id: Mapped[int] = mapped_column(ForeignKey("knowledge_categories.id"), index=True)
+    title: Mapped[str] = mapped_column(String(255))
+    content: Mapped[str] = mapped_column(Text)
+    tags: Mapped[str | None] = mapped_column(String(255))
+    version: Mapped[int] = mapped_column(default=1)
+    created_by: Mapped[int] = mapped_column(ForeignKey("users.id"))
+    created_at: Mapped[datetime.datetime] = mapped_column(default=datetime.datetime.utcnow)
+    updated_at: Mapped[datetime.datetime] = mapped_column(default=datetime.datetime.utcnow, onupdate=datetime.datetime.utcnow)
+
+class CustomForm(Base):
+    __tablename__ = "custom_forms"
+    id: Mapped[int] = mapped_column(primary_key=True, index=True)
+    tenant_id: Mapped[int] = mapped_column(ForeignKey("tenants.id"), index=True)
+    name: Mapped[str] = mapped_column(String(200))
+    description: Mapped[str | None] = mapped_column(Text)
+    request_type: Mapped[str] = mapped_column(String(100)) # LEAVE, PURCHASE, ACCESS, LICENSE, OTHER
+    is_active: Mapped[bool] = mapped_column(default=True)
+
+class CustomFormField(Base):
+    __tablename__ = "custom_form_fields"
+    id: Mapped[int] = mapped_column(primary_key=True, index=True)
+    form_id: Mapped[int] = mapped_column(ForeignKey("custom_forms.id"), index=True)
+    field_name: Mapped[str] = mapped_column(String(200))
+    field_type: Mapped[str] = mapped_column(String(50)) # TEXT, NUMBER, DATE, SELECT, FILE
+    validation_rules: Mapped[dict | None] = mapped_column(JSON)
+    is_required: Mapped[bool] = mapped_column(default=False)

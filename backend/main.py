@@ -28,7 +28,6 @@ models.Base.metadata.create_all(bind=engine)
 # --- Lifespan (Startup/Shutdown) ---
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    # Initializing In-Memory Cache (Fulfills the caching requirement without external Redis)
     FastAPICache.init(InMemoryBackend(), prefix="enterprise-cache")
     logger.info("✅ Caching System initialized successfully (In-Memory)")
     yield
@@ -70,12 +69,17 @@ from routers import (
     billing_router, 
     sla_router,
     governance_router,
-    tenant_router,      # <-- PHASE 10A: TENANTS
-    workspace_router,   # <-- PHASE 10A: WORKSPACES
-    channel_router,     # <-- PHASE 10A: CHANNELS
-    team_router,        # <-- PHASE 10C: TEAMS
-    project_router,     # <-- PHASE 10C: PROJECTS
-    meeting_router      # <-- PHASE 10C: MEETINGS
+    tenant_router,      
+    workspace_router,   
+    channel_router,     
+    team_router,        
+    project_router,     
+    meeting_router,     
+    workflow_router,    
+    search_router,      
+    analytics_router,
+    knowledge_router,   # <-- PHASE 10D: KNOWLEDGE BASE
+    form_router         # <-- PHASE 10D: CUSTOM FORMS
 )
 
 app.include_router(auth_router.router)
@@ -91,21 +95,21 @@ app.include_router(governance_router.router)
 app.include_router(tenant_router.router)
 app.include_router(workspace_router.router)
 app.include_router(channel_router.router)
-app.include_router(team_router.router)     # <-- REGISTER TEAM ROUTER
-app.include_router(project_router.router)  # <-- REGISTER PROJECT ROUTER
-app.include_router(meeting_router.router)  # <-- REGISTER MEETING ROUTER
-
+app.include_router(team_router.router)     
+app.include_router(project_router.router)  
+app.include_router(meeting_router.router)  
+app.include_router(workflow_router.router) 
+app.include_router(search_router.router)   
+app.include_router(analytics_router.router) 
+app.include_router(knowledge_router.router) # <-- REGISTER KNOWLEDGE ROUTER
+app.include_router(form_router.router)      # <-- REGISTER FORM ROUTER
 
 # --- PHASE 5: REAL-TIME WEBSOCKET ENDPOINT ---
 @app.websocket("/ws/{user_id}")
 async def websocket_endpoint(websocket: WebSocket, user_id: int):
-    """
-    This endpoint establishes a continuous connection with the frontend.
-    """
     await manager.connect(user_id, websocket)
     try:
         while True:
-            # We keep the connection alive by listening for any data
             data = await websocket.receive_text() 
     except WebSocketDisconnect:
         manager.disconnect(user_id)

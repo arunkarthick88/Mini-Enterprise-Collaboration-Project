@@ -3,14 +3,14 @@ import { useNavigate } from 'react-router-dom';
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer } from 'recharts';
 import { Sparkles, AlertTriangle, Users, Crown } from 'lucide-react';
 import api from '../api';
-import Navbar from '../components/Navbar'; // <-- IMPORT THE NEW NAVBAR
+import Navbar from '../components/Navbar'; 
 
 export default function Dashboard() {
     const [user, setUser] = useState(null);
     const [tasks, setTasks] = useState([]);
     const [approvals, setApprovals] = useState([]);
     const [aiData, setAiData] = useState(null);
-    const [organization, setOrganization] = useState(null); // <-- State for Org/Billing details
+    const [organization, setOrganization] = useState(null); 
     
     // --- PHASE 6: Insights State ---
     const [insights, setInsights] = useState(null);
@@ -122,15 +122,22 @@ export default function Dashboard() {
                                     <Users size={18} className="text-blue-500"/> Smart Assignment Guide
                                 </h4>
                                 <div className="space-y-3 max-h-48 overflow-y-auto pr-2">
-                                    {insights.smart_assignment?.map(emp => (
-                                        <div key={emp.user_id} className="flex justify-between items-center p-3 bg-gray-50 rounded-lg border border-gray-100">
-                                            <span className="text-sm font-medium text-gray-700">{emp.name}</span>
-                                            <span className={`text-[10px] px-2.5 py-1 rounded-full font-bold uppercase ${emp.status === 'Available' ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>
-                                                {emp.active_tasks} Active • {emp.status}
-                                            </span>
+                                    {insights.smart_assignment?.map((emp, idx) => (
+                                        <div key={emp.user_id || idx} className="flex justify-between items-center p-3 bg-gray-50 rounded-lg border border-gray-100">
+                                            <span className="text-sm font-medium text-gray-700">{emp.suggestion || emp.name}</span>
+                                            {emp.status && (
+                                              <span className={`text-[10px] px-2.5 py-1 rounded-full font-bold uppercase ${emp.status === 'Available' ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>
+                                                  {emp.active_tasks} Active • {emp.status}
+                                              </span>
+                                            )}
+                                            {emp.confidence && (
+                                               <span className="text-[10px] px-2.5 py-1 rounded-full font-bold bg-blue-100 text-blue-700">
+                                                  {emp.confidence} MATCH
+                                               </span>
+                                            )}
                                         </div>
                                     ))}
-                                    {insights.smart_assignment?.length === 0 && <p className="text-sm text-gray-400 italic">No employees found.</p>}
+                                    {insights.smart_assignment?.length === 0 && <p className="text-sm text-gray-400 italic">No suggestions available.</p>}
                                 </div>
                             </div>
 
@@ -141,14 +148,16 @@ export default function Dashboard() {
                                 </h4>
                                 <div className="space-y-2 max-h-48 overflow-y-auto pr-2">
                                     {insights.critical_alerts?.map((alert, i) => {
-                                        // Simple check to color code the fallback message vs actual risks
-                                        const isRisk = alert.includes("🚨");
+                                        // Handle the new structured AI data
+                                        const isWarning = alert.type === 'warning' || alert.type === 'error';
+                                        
                                         return (
-                                            <p key={i} className={`text-sm p-3 rounded-lg border-l-4 ${isRisk ? 'border-red-500 bg-red-50 text-red-800' : 'border-green-500 bg-green-50 text-green-800'}`}>
-                                                {alert}
+                                            <p key={i} className={`text-sm p-3 rounded-lg border-l-4 ${isWarning ? 'border-red-500 bg-red-50 text-red-800' : 'border-blue-500 bg-blue-50 text-blue-800'}`}>
+                                                {alert.message || alert}
                                             </p>
                                         );
                                     })}
+                                    {insights.critical_alerts?.length === 0 && <p className="text-sm text-gray-400 italic">No risks detected.</p>}
                                 </div>
                             </div>
                             
